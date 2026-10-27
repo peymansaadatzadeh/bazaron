@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export default function DashboardPage() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -32,12 +33,23 @@ export default function DashboardPage() {
         <h1 className="text-3xl font-bold text-green-600 mb-4">داشبورد</h1>
         <p className="text-gray-700 mb-6">شما با موفقیت وارد شدید!</p>
         <p className="font-mono bg-gray-100 p-2 rounded mb-6">{userEmail}</p>
-        <button
-          onClick={handleLogout}
-          className="bg-red-500 text-white py-2 px-6 rounded-md hover:bg-red-600 transition-colors"
-        >
-          خروج از حساب
-        </button>
+        
+        {/* دکمه‌های جدید */}
+        <div className="flex flex-col gap-3">
+          <Link 
+            href="/dashboard/create-store" 
+            className="bg-blue-600 text-white py-2 px-6 rounded-md hover:bg-blue-700 transition-colors block"
+          >
+            درخواست ساخت غرفه (فروشنده شوید)
+          </Link>
+
+          <button
+            onClick={handleLogout}
+            className="bg-red-500 text-white py-2 px-6 rounded-md hover:bg-red-600 transition-colors"
+          >
+            خروج از حساب
+          </button>
+        </div>
       </div>
     </div>
   )

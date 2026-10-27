@@ -2,19 +2,21 @@
 
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setMessage('')
 
-    // فقط ثبت‌نام در Auth را انجام می‌دهیم. ساخت پروفایل کار دیتابیس (تریگر) است.
     const { error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -22,10 +24,13 @@ export default function RegisterPage() {
 
     if (authError) {
       setMessage(`خطا در ثبت‌نام: ${authError.message}`)
+      setLoading(false)
     } else {
-      setMessage('ثبت‌نام با موفقیت انجام شد!')
+      setMessage('ثبت‌نام با موفقیت انجام شد! در حال انتقال به صفحه ورود...')
+      setTimeout(() => {
+        router.push('/login')
+      }, 2000) // ۲ ثانیه بعد از ثبت نام، به لاگین می‌رود
     }
-    setLoading(false)
   }
 
   return (
@@ -75,6 +80,13 @@ export default function RegisterPage() {
             {message}
           </p>
         )}
+
+        <div className="mt-6 text-center text-sm text-gray-600">
+          قبلاً ثبت‌نام کرده‌اید؟{' '}
+          <Link href="/login" className="text-blue-600 hover:underline">
+            وارد شوید
+          </Link>
+        </div>
       </div>
     </div>
   )

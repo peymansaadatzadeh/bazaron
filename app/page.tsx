@@ -10,7 +10,6 @@ export default function HomePage() {
 
   useEffect(() => {
     const fetchStores = async () => {
-      // گرفتن غرفه‌هایی که تایید شده‌اند (active)
       const { data, error } = await supabase
         .from('stores')
         .select('*')
@@ -31,55 +30,40 @@ export default function HomePage() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-gray-50">
-      {/* هدر سایت */}
-      <header className="bg-white shadow-sm py-4">
-        <div className="max-w-6xl mx-auto px-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-blue-600">بازار متل قو</h1>
-          <div className="flex gap-4">
-            <Link href="/login" className="text-gray-600 hover:text-blue-600">ورود</Link>
-            <Link href="/register" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">ثبت‌نام</Link>
-          </div>
-        </div>
-      </header>
+    <main className="max-w-6xl mx-auto px-4 py-8">
+      <div className="text-center mb-10">
+        <h2 className="text-3xl font-bold text-gray-800 mb-2">به بازار ما خوش آمدید</h2>
+        <p className="text-gray-600">بهترین غرفه‌ها و محصولات را اینجا پیدا کنید.</p>
+      </div>
 
-      {/* بخش اصلی */}
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-bold text-gray-800 mb-2">به بازار ما خوش آمدید</h2>
-          <p className="text-gray-600">بهترین غرفه‌ها و محصولات را اینجا پیدا کنید.</p>
+      {stores.length === 0 ? (
+        <div className="text-center text-gray-500 py-10">
+          هنوز هیچ غرفه‌ای تایید نشده است. (به عنوان مدیر، یک غرفه را تایید کنید تا اینجا نمایش داده شود).
         </div>
-
-        {stores.length === 0 ? (
-          <div className="text-center text-gray-500 py-10">
-            هنوز هیچ غرفه‌ای تایید نشده است. (به عنوان مدیر، یک غرفه را تایید کنید تا اینجا نمایش داده شود).
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {stores.map((store) => (
-              <div key={store.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-                {/* اگر لوگو داشت اینجا نمایش داده می‌شود، فعلاً یک جای خالی رنگی می‌گذاریم */}
-                <div className="h-32 bg-blue-100 flex items-center justify-center">
-                  <span className="text-blue-400 text-4xl font-bold">{store.name.charAt(0)}</span>
-                </div>
-                
-                <div className="p-6">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">{store.name}</h3>
-                  <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                    {store.description || 'توضیحاتی ثبت نشده است.'}
-                  </p>
-                  <Link 
-                    href={`/store/${store.id}`} 
-                    className="block text-center w-full bg-gray-100 text-gray-800 py-2 rounded-md hover:bg-gray-200 transition-colors"
-                  >
-                    مشاهده غرفه
-                  </Link>
-                </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {stores.map((store) => (
+            <div key={store.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+              <div className="h-32 bg-blue-100 flex items-center justify-center">
+                <span className="text-blue-400 text-4xl font-bold">{store.name.charAt(0)}</span>
               </div>
-            ))}
-          </div>
-        )}
-      </main>
-    </div>
+              
+              <div className="p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-2">{store.name}</h3>
+                <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+                  {store.description || 'توضیحاتی ثبت نشده است.'}
+                </p>
+                <Link 
+                  href={`/store/${store.id}`} 
+                  className="block text-center w-full bg-gray-100 text-gray-800 py-2 rounded-md hover:bg-gray-200 transition-colors"
+                >
+                  مشاهده غرفه
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </main>
   )
 }

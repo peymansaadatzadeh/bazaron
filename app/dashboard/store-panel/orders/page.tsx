@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '../../../lib/supabase'
+import { supabase } from '../../../../lib/supabase'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 
 export default function SellerOrdersPage() {
   const [orders, setOrders] = useState<any[]>([])
@@ -66,22 +65,21 @@ export default function SellerOrdersPage() {
   if (message) return <div className="p-8 text-center text-red-600 font-bold">{message}</div>
 
   return (
-    <div dir="rtl" className="min-h-screen bg-gray-50 p-8">
+    <div className="p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-2xl font-bold text-gray-800">مدیریت سفارشات</h1>
-          <Link href="/dashboard" className="text-blue-600 hover:underline">بازگشت به داشبورد</Link>
         </div>
 
         {orders.length === 0 ? (
-          <div className="bg-white p-8 text-center rounded-lg shadow-sm text-gray-500">
+          <div className="bg-white p-8 text-center rounded-3xl shadow-sm border border-gray-100 text-gray-500">
             هیچ سفارشی برای غرفه شما ثبت نشده است.
           </div>
         ) : (
           <div className="space-y-6">
             {orders.map((order) => (
-              <div key={order.id} className="bg-white rounded-lg shadow-md overflow-hidden">
-                <div className="bg-gray-100 p-4 border-b flex justify-between items-center">
+              <div key={order.id} className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-gray-50 p-4 border-b flex justify-between items-center">
                   <div>
                     <span className="text-sm text-gray-500">کد سفارش: </span>
                     <span className="font-mono text-xs">{order.id.split('-')[0]}</span>
@@ -97,27 +95,27 @@ export default function SellerOrdersPage() {
                   </div>
                 </div>
 
-                <div className="p-4">
+                <div className="p-6">
                   <h3 className="font-bold text-gray-800 mb-2">اطلاعات خریدار:</h3>
-                  <p className="text-sm text-gray-600 mb-4">
+                  <p className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-xl">
                     نام: {order.receiver_name} | تلفن: {order.receiver_phone} <br />
                     آدرس: {order.shipping_address}
                   </p>
 
                   <h3 className="font-bold text-gray-800 mb-2">محصولات:</h3>
-                  <ul className="list-disc list-inside text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded">
+                  <ul className="list-disc list-inside text-sm text-gray-600 mb-4 bg-white border border-gray-100 p-3 rounded-xl">
                     {order.order_items.map((item: any) => (
                       <li key={item.id}>{item.product_title} (تعداد: {item.quantity})</li>
                     ))}
                   </ul>
 
-                  <div className="flex justify-between items-center mt-4 border-t pt-4">
-                    <span className="font-bold text-lg">مبلغ کل: {order.total_amount.toLocaleString()} تومان</span>
+                  <div className="flex justify-between items-center mt-6 border-t pt-4">
+                    <span className="font-bold text-lg text-indigo-600">مبلغ کل: {order.total_amount.toLocaleString()} تومان</span>
                     
                     {order.status === 'pending_seller' && (
                       <button 
                         onClick={() => handleApproveStock(order.id)}
-                        className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700"
+                        className="bg-green-600 text-white px-6 py-2 rounded-xl hover:bg-green-700 font-bold transition-colors"
                       >
                         تایید موجودی و ارسال برای پرداخت
                       </button>

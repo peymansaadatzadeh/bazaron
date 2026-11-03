@@ -13,12 +13,22 @@ export default function UnifiedCheckoutPage() {
   const [cart, setCart] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [message, setMessage] = useState('')
   const [showSuccessModal, setShowSuccessModal] = useState(false)
+  
+  const [sessionUser, setSessionUser] = useState<any>(null)
 
-  const [receiverName, setReceiverName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [receiverPhone, setReceiverPhone] = useState('')
   const [shippingAddress, setShippingAddress] = useState('')
+
+  const [errors, setErrors] = useState({
+    firstName: '',
+    lastName: '',
+    phone: '',
+    address: '',
+    auth: ''
+  })
 
   useEffect(() => {
     const loadData = async () => {
@@ -30,32 +40,90 @@ export default function UnifiedCheckoutPage() {
       setCart(JSON.parse(data))
 
       const { data: { session } } = await supabase.auth.getSession()
+      
       if (session) {
+        setSessionUser(session.user)
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
         if (profile) {
-          if (profile.full_name) setReceiverName(profile.full_name)
+          if (profile.first_name) setFirstName(profile.first_name)
+          if (profile.last_name) setLastName(profile.last_name)
+          else if (profile.full_name) {
+            const parts = profile.full_name.split(' ')
+            setFirstName(parts[0] || '')
+            setLastName(parts.slice(1).join(' ') || '')
+          }
           if (profile.phone_number) setReceiverPhone(profile.phone_number)
           if (profile.address) setShippingAddress(`${profile.city ? profile.city + '، ' : ''}${profile.address}`)
         }
+      } else {
+        setSessionUser(null)
       }
+      
       setLoading(false)
     }
     loadData()
   }, [router])
 
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/[^0-9]/g, '')
+    setReceiverPhone(value)
+    if (errors.phone) setErrors({ ...errors, phone: '' })
+  }
+
+  const validateForm = () => {
+    let tempErrors = { firstName: '', lastName: '', phone: '', address: '', auth: '' }
+    let isValid = true
+
+    if (!firstName.trim()) {
+      tempErrors.firstName = 'وارد کردن نام الزامی است.'
+      isValid = false
+    }
+
+    if (!lastName.trim()) {
+      tempErrors.lastName = 'وارد کردن نام خانوادگی الزامی است.'
+      isValid = false
+    }
+
+    if (!/^09\d{9}$/.test(receiverPhone)) {
+      tempErrors.phone = 'شماره تماس باید ۱۱ رقم بوده و با 09 شروع شود.'
+      isValid = false
+    }
+
+    if (shippingAddress.trim().length < 10) {
+      tempErrors.address = 'آدرس باید حداقل ۱۰ حرف باشد.'
+      isValid = false
+    }
+
+    setErrors(tempErrors)
+    return isValid
+  }
+
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSubmitting(true)
-    setMessage('')
-
+    
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
-      setMessage('لطفا ابتدا وارد حساب خود شوید.')
-      setSubmitting(false)
+      setErrors(prev => ({ ...prev, auth: 'خطا: برای ارسال درخواست ابتدا باید ثبت‌نام کنید یا وارد حساب خود شوید.' }))
       return
     }
 
+    if (!validateForm()) {
+      return
+    }
+
+    setSubmitting(true)
+
     try {
+      const fullName = `${firstName} ${lastName}`.trim()
+
+      await supabase.from('profiles').update({
+        first_name: firstName,
+        last_name: lastName,
+        full_name: fullName,
+        phone_number: receiverPhone,
+        address: shippingAddress
+      }).eq('id', session.user.id)
+
       const paymentGroupId = crypto.randomUUID()
       const storeIds = Object.keys(cart)
       
@@ -65,7 +133,6 @@ export default function UnifiedCheckoutPage() {
         const storeData = cart[storeId]
         const subtotal = storeData.items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0)
         
-        // ما هزینه کل ارسال (پایه + اضافی) رو فقط به اولین فاکتور اضافه میکنیم تا چندبار حساب نشه
         const currentShippingFee = isFirstOrder ? shippingFee : 0
         isFirstOrder = false
 
@@ -88,7 +155,7 @@ export default function UnifiedCheckoutPage() {
             commission_amount: commissionAmount,
             seller_net_amount: sellerNetAmount,
             shipping_address: shippingAddress,
-            receiver_name: receiverName,
+            receiver_name: fullName,
             receiver_phone: receiverPhone
           }]).select().single()
 
@@ -112,7 +179,7 @@ export default function UnifiedCheckoutPage() {
       setShowSuccessModal(true)
 
     } catch (error: any) {
-      setMessage(error.message)
+      alert(error.message)
       setSubmitting(false)
     }
   }
@@ -149,27 +216,124 @@ export default function UnifiedCheckoutPage() {
       <div className="max-w-4xl mx-auto flex flex-col md:flex-row gap-6">
         
         <div className="w-full md:w-2/3 bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
-          <h1 className="text-2xl font-bold mb-6 text-gray-800 border-b pb-4 border-gray-100">تکمیل اطلاعات ارسال</h1>
-          <form onSubmit={handleSubmitOrder} className="space-y-5">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">نام و نام خانوادگی گیرنده</label>
-              <input type="text" value={receiverName} onChange={(e) => setReceiverName(e.target.value)} required className="w-full bg-gray-50 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <div className="flex justify-between items-center mb-6 border-b pb-4 border-gray-100">
+            <h1 className="text-2xl font-bold text-gray-800">تکمیل اطلاعات ارسال</h1>
+          </div>
+
+          {/* بنر هشدار */}
+          {!sessionUser && (
+            <div className="bg-red-50 border-2 border-red-200 text-red-800 p-6 rounded-2xl mb-8 flex flex-col items-center text-center">
+              <div className="bg-red-100 p-3 rounded-full mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="font-bold text-lg mb-2">شما وارد حساب کاربری خود نشده‌اید</h3>
+              <p className="text-sm mb-6 max-w-sm leading-relaxed">
+                برای تکمیل فرم و ارسال سفارش، ابتدا باید وارد حساب خود شوید یا ثبت‌نام کنید.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
+                {/* لینک ورود همراه با پارامتر redirect */}
+                <Link 
+                  href={`/login?redirect=${encodeURIComponent(`/checkout?shipping=${shippingFee}`)}`} 
+                  className="bg-red-600 text-white px-8 py-3 rounded-full text-sm font-bold hover:bg-red-700 hover:shadow-lg transition-all w-full sm:w-auto"
+                >
+                  ورود به حساب
+                </Link>
+                {/* لینک ثبت‌نام همراه با پارامتر redirect */}
+                <Link 
+                  href={`/register?redirect=${encodeURIComponent(`/checkout?shipping=${shippingFee}`)}`} 
+                  className="bg-white text-red-600 border-2 border-red-600 px-8 py-3 rounded-full text-sm font-bold hover:bg-red-50 hover:shadow-lg transition-all w-full sm:w-auto"
+                >
+                  ثبت‌نام
+                </Link>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">شماره تماس</label>
-              <input type="text" value={receiverPhone} onChange={(e) => setReceiverPhone(e.target.value)} required className="w-full bg-gray-50 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-left" dir="ltr" />
+          )}
+          
+          <form onSubmit={handleSubmitOrder} noValidate className="space-y-5">
+            
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="w-full sm:w-1/2">
+                <label className="block text-sm font-bold text-gray-700 mb-2">نام گیرنده *</label>
+                <input 
+                  type="text" 
+                  value={firstName} 
+                  onChange={(e) => {
+                    setFirstName(e.target.value)
+                    if (errors.firstName) setErrors({ ...errors, firstName: '' })
+                  }} 
+                  disabled={!sessionUser}
+                  className={`w-full bg-gray-50 px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed ${errors.firstName ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'}`} 
+                  placeholder="مثلاً: پیمان" 
+                />
+                {errors.firstName && <p className="text-red-500 text-xs mt-1 font-bold">{errors.firstName}</p>}
+              </div>
+              
+              <div className="w-full sm:w-1/2">
+                <label className="block text-sm font-bold text-gray-700 mb-2">نام خانوادگی گیرنده *</label>
+                <input 
+                  type="text" 
+                  value={lastName} 
+                  onChange={(e) => {
+                    setLastName(e.target.value)
+                    if (errors.lastName) setErrors({ ...errors, lastName: '' })
+                  }} 
+                  disabled={!sessionUser}
+                  className={`w-full bg-gray-50 px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed ${errors.lastName ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'}`} 
+                  placeholder="مثلاً: صادق‌زاده" 
+                />
+                {errors.lastName && <p className="text-red-500 text-xs mt-1 font-bold">{errors.lastName}</p>}
+              </div>
             </div>
+
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">آدرس کامل پستی</label>
-              <textarea value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} required rows={3} className="w-full bg-gray-50 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <label className="block text-sm font-bold text-gray-700 mb-2">شماره تلفن همراه *</label>
+              <input 
+                type="tel" 
+                value={receiverPhone} 
+                onChange={handlePhoneChange} 
+                disabled={!sessionUser}
+                className={`w-full bg-gray-50 px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-left disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed ${errors.phone ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'}`} 
+                dir="ltr" 
+                placeholder="09123456789" 
+                maxLength={11}
+              />
+              {errors.phone ? (
+                <p className="text-red-500 text-xs mt-1 font-bold">{errors.phone}</p>
+              ) : (
+                <p className="text-xs text-gray-400 mt-1">شماره باید با 09 شروع شده و ۱۱ رقم باشد.</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">آدرس کامل پستی *</label>
+              <textarea 
+                value={shippingAddress} 
+                onChange={(e) => {
+                  setShippingAddress(e.target.value)
+                  if (errors.address) setErrors({ ...errors, address: '' })
+                }} 
+                disabled={!sessionUser}
+                rows={3} 
+                className={`w-full bg-gray-50 px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed ${errors.address ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'}`} 
+                placeholder="استان، شهر، خیابان، کوچه، پلاک و واحد..."
+              />
+              {errors.address && <p className="text-red-500 text-xs mt-1 font-bold">{errors.address}</p>}
             </div>
             
             <div className="pt-4">
-              <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-4 rounded-xl hover:shadow-lg font-bold text-lg disabled:from-gray-300 disabled:to-gray-400 transition-all transform hover:-translate-y-0.5">
+              <button 
+                type="submit" 
+                disabled={submitting || !sessionUser} 
+                className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-4 rounded-xl hover:shadow-lg font-bold text-lg disabled:from-gray-300 disabled:to-gray-400 transition-all transform hover:-translate-y-0.5"
+              >
                 {submitting ? 'در حال ارسال برای بررسی...' : 'ارسال برای بررسی موجودی'}
               </button>
+              
+              {errors.auth && <p className="text-center mt-4 font-bold p-3 rounded-xl text-red-600 bg-red-50">{errors.auth}</p>}
             </div>
-            {message && <p className={`text-center mt-4 font-bold p-3 rounded-xl ${message.includes('خطا') ? 'text-red-600 bg-red-50' : 'text-green-600 bg-green-50'}`}>{message}</p>}
           </form>
         </div>
 
@@ -184,7 +348,7 @@ export default function UnifiedCheckoutPage() {
             </div>
             {shippingFee > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">هزینه ارسال و جمع‌آوری:</span>
+                <span className="text-gray-600">هزینه جمع آوری از غرفه ها:</span>
                 <span className="font-bold text-orange-600">{shippingFee.toLocaleString()}</span>
               </div>
             )}

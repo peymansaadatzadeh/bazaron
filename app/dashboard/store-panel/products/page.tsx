@@ -15,7 +15,6 @@ export default function ProductsPage() {
 
   const [cardStatus, setCardStatus] = useState<CardStatus>(null)
 
-  // استیت‌های فرم ثبت
   const [title, setTitle] = useState('')
   const [price, setPrice] = useState('')
   const [discountPrice, setDiscountPrice] = useState('')
@@ -30,7 +29,6 @@ export default function ProductsPage() {
   const [addSlots, setAddSlots] = useState<ImageSlot[]>([null, null, null, null, null])
   const [uploading, setUploading] = useState(false)
   
-  // استیت‌های ویرایش
   const [editingProduct, setEditingProduct] = useState<any>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editPrice, setEditPrice] = useState('')
@@ -111,7 +109,8 @@ export default function ProductsPage() {
         store_id: storeId, title, description, price: Number(price),
         discount_price: discountPrice ? Number(discountPrice) : null,
         stock: Number(stock), image_url: mainImageUrl, category, size, color,
-        contact_phone: contactPhone, contact_email: contactEmail, status: 'active'
+        contact_phone: contactPhone, contact_email: contactEmail, 
+        status: 'pending_approval'
       }]).select().single()
 
       if (productError) throw productError
@@ -129,7 +128,7 @@ export default function ProductsPage() {
       setAddSlots([null, null, null, null, null]);
       addFileInputRefs.current.forEach(ref => { if(ref) ref.value = '' });
       await fetchProducts(storeId)
-      alert('محصول جدید با موفقیت اضافه شد.')
+      alert('محصول جدید با موفقیت ثبت شد و پس از تایید مدیر در سایت نمایش داده می‌شود.')
 
     } catch (error: any) {
       alert(`خطا در ثبت: ${error.message}`)
@@ -201,11 +200,16 @@ export default function ProductsPage() {
 
       const mainImageUrl = finalImageUrls.length > 0 ? finalImageUrls[0] : null
 
+      // ⚠️ تغییر امنیتی مهم: هر بار که محصول ویرایش میشود، وضعیت آن به "در انتظار تایید" برمیگردد
+      const newStatus = 'pending_approval'
+
       const { error } = await supabase.from('products').update({
         title: editTitle, price: Number(editPrice),
         discount_price: editDiscountPrice ? Number(editDiscountPrice) : null,
         stock: Number(editStock), description: editDescription, size: editSize, color: editColor,
-        image_url: mainImageUrl
+        image_url: mainImageUrl,
+        status: newStatus,
+        rejection_reason: null // دلیل رد قبلی پاک میشود
       }).eq('id', pid)
 
       if (error) throw error
@@ -253,7 +257,7 @@ export default function ProductsPage() {
     return (
       <div className="grid grid-cols-2 gap-2 mt-2">
         <div className="col-span-2 relative h-32 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:bg-gray-100 transition-colors cursor-pointer group">
-          <input type="file" accept="image/*" onChange={(e) => onSelect(0, e)} ref={el => refs.current[0] = el} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+          <input type="file" accept="image/*" onChange={(e) => onSelect(0, e)} ref={el => { refs.current[0] = el }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
           {slots[0] ? (
             <>
               <img src={slots[0].url} alt="Cover" className="w-full h-full object-cover" />
@@ -270,7 +274,7 @@ export default function ProductsPage() {
 
         {[1, 2, 3, 4].map((index) => (
           <div key={index} className="relative h-24 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden hover:bg-gray-100 transition-colors cursor-pointer group">
-            <input type="file" accept="image/*" onChange={(e) => onSelect(index, e)} ref={el => refs.current[index] = el} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+            <input type="file" accept="image/*" onChange={(e) => onSelect(index, e)} ref={el => { refs.current[index] = el }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
             {slots[index] ? (
               <>
                 <img src={slots[index]!.url} alt={`Slot ${index}`} className="w-full h-full object-cover" />
@@ -332,18 +336,18 @@ export default function ProductsPage() {
                     
                     {isProcessing && (
                       <div className={`absolute inset-0 z-30 flex flex-col items-center justify-center rounded-2xl backdrop-blur-sm transition-colors duration-300 ${
-                        cardStatus.state === 'saving' ? 'bg-white/70' : 
-                        cardStatus.state === 'success' ? 'bg-green-50/90' : 
+                        cardStatus?.state === 'saving' ? 'bg-white/70' : 
+                        cardStatus?.state === 'success' ? 'bg-green-50/90' : 
                         'bg-red-50/90'
                       }`}>
-                        {cardStatus.state === 'saving' && (
+                        {cardStatus?.state === 'saving' && (
                           <><div className="animate-spin rounded-full h-8 w-8 border-t-4 border-b-4 border-indigo-600 mb-2"></div><span className="text-sm font-bold text-indigo-800">در حال ذخیره تغییرات...</span></>
                         )}
-                        {cardStatus.state === 'success' && (
+                        {cardStatus?.state === 'success' && (
                           <><svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-500 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><span className="text-sm font-bold text-green-700">تغییرات ذخیره شد</span></>
                         )}
-                        {cardStatus.state === 'error' && (
-                          <><svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-red-500 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><span className="text-sm font-bold text-red-700">تغییرات ذخیره نشد</span><span className="text-xs text-red-600 mt-1 px-2 text-center">بعد از بررسی اتصال اینترنت مجددا تلاش کنید</span></>
+                        {cardStatus?.state === 'error' && (
+                          <><svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-red-500 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><span className="text-sm font-bold text-red-700">تغییرات ذخیره نشد</span></>
                         )}
                       </div>
                     )}
@@ -358,7 +362,23 @@ export default function ProductsPage() {
                       </div>
                       <div className="p-3 flex-grow flex flex-col justify-between">
                         <h4 className="font-bold text-gray-800 text-sm truncate">{product.title}</h4>
-                        <div className="mt-2 flex items-center justify-between">
+                        
+                        <div className="mt-1 mb-2">
+                          {product.status === 'pending_approval' && (
+                            <span className="text-[10px] text-orange-600 bg-orange-100 px-2 py-1 rounded-md border border-orange-200 font-bold inline-block">در انتظار تایید مدیر</span>
+                          )}
+                          {product.status === 'active' && (
+                            <span className="text-[10px] text-green-600 bg-green-100 px-2 py-1 rounded-md border border-green-200 font-bold inline-block">تایید شده و قابل نمایش</span>
+                          )}
+                          {product.status === 'rejected' && (
+                            <div className="mt-2 text-xs bg-red-50 text-red-700 p-2.5 rounded-lg border border-red-200">
+                              <strong className="block mb-1 text-red-800">این محصول توسط مدیر رد شد:</strong>
+                              {product.rejection_reason || 'دلیلی ذکر نشده است.'}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-auto flex items-center justify-between">
                           <span className="font-bold text-indigo-600 text-sm">{product.price.toLocaleString()} <span className="text-[10px] font-normal text-gray-500">تومان</span></span>
                           <span className="text-[10px] text-gray-500 bg-white px-2 py-1 rounded-md border border-gray-100">موجودی: {product.stock}</span>
                         </div>

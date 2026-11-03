@@ -1,16 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { supabase } from '../../lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  
+  // گرفتن آدرس مقصد از URL (اگر وجود داشته باشد)
+  const searchParams = useSearchParams()
+  const redirectUrl = searchParams.get('redirect')
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,7 +33,13 @@ export default function LoginPage() {
       setMessage('ورود موفقیت‌آمیز بود! در حال انتقال...')
       setLoading(false)
       router.refresh()
-      router.push('/dashboard')
+      
+      // اگر آدرس مقصدی وجود داشت، برو اونجا. وگرنه برو داشبورد
+      if (redirectUrl) {
+        router.push(decodeURIComponent(redirectUrl))
+      } else {
+        router.push('/dashboard')
+      }
     }
   }
 
@@ -95,11 +105,20 @@ export default function LoginPage() {
 
         <div className="mt-8 text-center text-sm text-gray-600 border-t border-gray-100 pt-6">
           حساب کاربری ندارید؟{' '}
-          <Link href="/register" className="text-indigo-600 font-bold hover:text-indigo-800 transition-colors">
+          {/* انتقال پارامتر redirect به صفحه ثبت‌نام هم */}
+          <Link href={redirectUrl ? `/register?redirect=${encodeURIComponent(redirectUrl)}` : '/register'} className="text-indigo-600 font-bold hover:text-indigo-800 transition-colors">
             همین حالا ثبت‌نام کنید
           </Link>
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen bg-gray-50"><div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div></div>}>
+      <LoginForm />
+    </Suspense>
   )
 }

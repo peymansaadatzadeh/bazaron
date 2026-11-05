@@ -11,7 +11,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [role, setRole] = useState('customer')
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const pathname = usePathname() // گرفتن آدرس فعلی صفحه
+  const pathname = usePathname()
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -20,7 +20,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       
       setUserEmail(session.user.email ?? null)
       
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single()
+      const { data: profile } = await supabase.from('profiles').select('role, first_name').eq('id', session.user.id).single()
+      
+      // ✅ چک کردن اینکه آیا اطلاعات تکمیل شده است یا نه
+      if (profile && (!profile.first_name || profile.first_name === '')) {
+        router.push('/complete-profile')
+        return
+      }
+
       if (profile) setRole(profile.role)
       
       const { data: storeData } = await supabase.from('stores').select('*').eq('owner_id', session.user.id).maybeSingle()
@@ -33,12 +40,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (loading) return <div className="flex justify-center items-center min-h-screen bg-gray-50"><div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div></div>
 
-  // اگر کاربر در بخش پنل فروشنده است، سایدبار کاربری را نشان نده و فقط محتوا را رندر کن
   if (pathname.startsWith('/dashboard/store-panel')) {
     return <>{children}</>
   }
 
-  // در غیر این صورت، سایدبار کاربری را با محتوا نشان بده
   return (
     <div className="flex min-h-screen bg-gray-50" dir="rtl">
       <UserSidebar userEmail={userEmail} store={store} role={role} />

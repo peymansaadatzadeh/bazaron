@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-export default function SellerSidebar({ storeName }: { storeName: string }) {
+// پراپ logoUrl اضافه شد
+export default function SellerSidebar({ storeName, logoUrl }: { storeName: string, logoUrl: string | null }) {
   const pathname = usePathname()
 
   const menuItems = [
@@ -18,11 +19,16 @@ export default function SellerSidebar({ storeName }: { storeName: string }) {
   return (
     <aside className="w-64 bg-gray-900 text-white border-l border-gray-800 h-screen sticky top-0 flex flex-col shadow-lg hidden md:flex">
       <div className="p-6 border-b border-gray-800 flex items-center gap-3">
-        <div className="w-12 h-12 bg-indigo-500 text-white rounded-xl flex items-center justify-center font-black text-xl shadow-sm">
-          {storeName.charAt(0)}
+        {/* ✅ تغییر آواتار به لوگو */}
+        <div className="w-12 h-12 bg-indigo-500 text-white rounded-xl flex items-center justify-center font-black text-xl shadow-sm overflow-hidden shrink-0 border border-gray-700">
+          {logoUrl ? (
+            <img src={logoUrl} alt={storeName} className="w-full h-full object-cover" />
+          ) : (
+            storeName.charAt(0)
+          )}
         </div>
         <div>
-          <h2 className="font-bold text-white text-sm">{storeName}</h2>
+          <h2 className="font-bold text-white text-sm line-clamp-1">{storeName}</h2>
           <span className="text-xs text-gray-400">پنل فروشندگی</span>
         </div>
       </div>

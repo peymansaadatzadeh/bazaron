@@ -9,6 +9,7 @@ export default function CustomerOrdersPage() {
   const [groupedOrders, setGroupedOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedGroup, setSelectedGroup] = useState<any>(null)
+  const [confirming, setConfirming] = useState(false)
   const router = useRouter()
 
   const fetchMyOrders = async () => {
@@ -33,6 +34,15 @@ export default function CustomerOrdersPage() {
 
     if (!error && data) {
       const groups: any = {}
+      const statusPriority: any = {
+        cancelled: 0,
+        pending_admin_review: 1,
+        pending_payment: 2,
+        paid: 3,
+        shipped: 4,
+        delivered: 5
+      }
+
       data.forEach((order: any) => {
         const groupId = order.payment_group_id || order.id
         
@@ -49,8 +59,9 @@ export default function CustomerOrdersPage() {
         groups[groupId].totalAmount += order.total_amount
         groups[groupId].orders.push(order)
         
-        if (order.status === 'pending_payment') groups[groupId].status = 'pending_payment'
-        if (order.status === 'paid') groups[groupId].status = 'paid'
+        if ((statusPriority[order.status] ?? 99) < (statusPriority[groups[groupId].status] ?? 99)) {
+          groups[groupId].status = order.status
+        }
       })
 
       setGroupedOrders(Object.values(groups))
@@ -61,6 +72,49 @@ export default function CustomerOrdersPage() {
   useEffect(() => {
     fetchMyOrders()
   }, [router])
+
+  const handleConfirmReceipt = async () => {
+    if (!selectedGroup) return
+    if (!confirm('آیا کالاهای این فاکتور را دریافت کرده‌اید؟ با این کار امکان ثبت نظر برای محصولات فعال می‌شود.')) return
+
+    setConfirming(true)
+    try {
+      const orderIds = selectedGroup.orders
+        .filter((o: any) => o.status === 'shipped')
+        .map((o: any) => o.id)
+
+      if (orderIds.length === 0) {
+        alert('سفارش ارسال‌شده‌ای برای تأیید وجود ندارد.')
+        setConfirming(false)
+        return
+      }
+
+      // ✅ تغییر مهم: اضافه کردن .select() برای تشخیص اینکه آیا واقعاً در دیتابیس تغییر کرد یا نه (مشکل RLS)
+      const { data: updatedData, error } = await supabase
+        .from('orders')
+        .update({ status: 'delivered' })
+        .in('id', orderIds)
+        .select('id')
+
+      if (error) throw error
+      
+      // اگر RLS اجازه نده، دیتا خالی برمی‌گرده و ارور نمی‌ده!
+      if (!updatedData || updatedData.length === 0) {
+        throw new Error('سیستم دیتابیس اجازه تغییر وضعیت را نداد (احتمالاً مشکل RLS در Supabase).')
+      }
+      if (updatedData.length < orderIds.length) {
+        throw new Error(`فقط ${updatedData.length} از ${orderIds.length} سفارش تغییر کرد.`)
+      }
+
+      alert('دریافت کالا با موفقیت تأیید شد. حالا می‌توانید برای محصولات نظر ثبت کنید.')
+      setSelectedGroup(null)
+      await fetchMyOrders()
+    } catch (error: any) {
+      alert(`خطا در تأیید دریافت: ${error.message}`)
+    } finally {
+      setConfirming(false)
+    }
+  }
 
   const getStatusDisplay = (status: string) => {
     switch (status) {
@@ -114,6 +168,7 @@ export default function CustomerOrdersPage() {
                     const statusInfo = getStatusDisplay(group.status)
                     const date = new Date(group.date).toLocaleDateString('fa-IR', { hour: '2-digit', minute: '2-digit' })
                     const isPendingPayment = group.status === 'pending_payment'
+                    const isShipped = group.status === 'shipped'
                     
                     return (
                       <tr key={group.id} className="hover:bg-gray-50/50 transition-colors">
@@ -129,10 +184,12 @@ export default function CustomerOrdersPage() {
                             className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
                               isPendingPayment 
                                 ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm' 
+                                : isShipped
+                                ? 'bg-teal-600 text-white hover:bg-teal-700 shadow-sm'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                           >
-                            {isPendingPayment ? 'بررسی و پرداخت' : 'نمایش جزئیات'}
+                            {isPendingPayment ? 'بررسی و پرداخت' : isShipped ? 'تأیید دریافت' : 'نمایش جزئیات'}
                           </button>
                         </td>
                       </tr>
@@ -145,12 +202,10 @@ export default function CustomerOrdersPage() {
         )}
       </div>
 
-      {/* پاپ‌آپ دو ستونه */}
       {selectedGroup && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-fade-in-up">
             
-            {/* هدر فاکتور */}
             <div className="bg-white px-5 py-3 border-b flex justify-between items-center z-10 shrink-0 shadow-sm">
               <div>
                 <h3 className="font-bold text-lg text-gray-800">جزئیات فاکتور</h3>
@@ -165,10 +220,8 @@ export default function CustomerOrdersPage() {
               </button>
             </div>
             
-            {/* بدنه دو ستونه */}
             <div className="flex flex-col md:flex-row flex-grow overflow-hidden">
               
-              {/* ستون محصولات (سمت راست) */}
               <div className="w-full md:w-2/3 p-3 overflow-y-auto space-y-3 bg-gray-50">
                 {selectedGroup.orders.map((order: any) => (
                   <div key={order.id} className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
@@ -224,7 +277,6 @@ export default function CustomerOrdersPage() {
                 ))}
               </div>
 
-              {/* ستون خلاصه و پرداخت (سمت چپ) */}
               <div className="w-full md:w-1/3 bg-white border-r border-gray-100 p-5 flex flex-col justify-between shrink-0">
                 <div>
                   <h4 className="font-bold text-gray-800 mb-4 border-b pb-2">خلاصه فاکتور</h4>
@@ -256,6 +308,23 @@ export default function CustomerOrdersPage() {
                     >
                       تایید و پرداخت
                     </button>
+                  )}
+
+                  {/* ✅ دکمه تأیید دریافت داخل مودال */}
+                  {selectedGroup.status === 'shipped' && (
+                    <button 
+                      onClick={handleConfirmReceipt}
+                      disabled={confirming}
+                      className="w-full bg-gradient-to-r from-teal-600 to-green-600 text-white py-3.5 rounded-xl hover:shadow-lg hover:shadow-teal-500/30 disabled:from-gray-300 disabled:to-gray-400 font-bold text-sm transition-all transform hover:-translate-y-0.5"
+                    >
+                      {confirming ? 'در حال ثبت...' : '✓ تأیید دریافت کالا'}
+                    </button>
+                  )}
+
+                  {selectedGroup.status === 'delivered' && (
+                    <div className="w-full bg-teal-50 text-teal-700 py-3 rounded-xl font-bold text-sm text-center border border-teal-200">
+                      ✓ کالا تحویل داده شده
+                    </div>
                   )}
                 </div>
               </div>

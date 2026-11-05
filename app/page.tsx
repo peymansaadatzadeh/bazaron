@@ -3,27 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import Link from 'next/link'
-
-const ProductCard = ({ product }: { product: any }) => (
-  <Link href={`/product/${product.id}`} className="group bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden border border-gray-100 flex flex-col w-[220px] sm:w-[240px] shrink-0">
-    <div className="h-40 bg-gray-100 relative overflow-hidden flex items-center justify-center">
-      {product.image_url ? (
-        <img src={product.image_url} alt={product.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-      ) : (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-300 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      )}
-    </div>
-    <div className="p-4 flex flex-col flex-grow">
-      <h4 className="font-bold text-gray-800 mb-1 truncate text-sm">{product.title}</h4>
-      <p className="text-xs text-gray-500 mb-2 truncate">{product.stores?.name}</p>
-      <div className="mt-auto">
-        <span className="font-black text-indigo-600 text-sm">{product.price.toLocaleString()} <span className="text-xs font-normal text-gray-500">تومان</span></span>
-      </div>
-    </div>
-  </Link>
-)
+import ProductCard from './components/ProductCard'
 
 const StoreCard = ({ store, avgRating }: { store: any, avgRating: string | null }) => (
   <Link href={`/store/${store.id}`} className="group bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 p-6 flex flex-col items-center text-center border border-gray-100 w-[200px] sm:w-[220px] shrink-0">
@@ -53,13 +33,15 @@ export default function HomePage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: latest } = await supabase.from('products').select('*, stores(name)').eq('status', 'active').order('created_at', { ascending: false }).limit(10)
+      const storeFields = 'id, name, logo_url, discount_percentage, discount_expires_at, discount_category'
+      
+      const { data: latest } = await supabase.from('products').select(`*, stores(${storeFields})`).eq('status', 'active').order('created_at', { ascending: false }).limit(10)
       if (latest) setLatestProducts(latest)
 
-      const { data: best } = await supabase.from('products').select('*, stores(name)').eq('status', 'active').order('stock', { ascending: true }).limit(10)
+      const { data: best } = await supabase.from('products').select(`*, stores(${storeFields})`).eq('status', 'active').order('stock', { ascending: true }).limit(10)
       if (best) setBestSellers(best)
 
-      const { data: storesData } = await supabase.from('stores').select(`*, products ( reviews ( rating, status ) )`).eq('status', 'active').order('created_at', { ascending: false })
+      const { data: storesData } = await supabase.from('stores').select(`*, products ( reviews ( rating, status ) )`).eq('status', 'active').is('is_suspended', false).order('created_at', { ascending: false })
 
       if (storesData) {
         setNewestStores(storesData.slice(0, 10))
@@ -110,20 +92,35 @@ export default function HomePage() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
+        
+        {/* ✅ بازگشت به اسکرول افقی */}
         <section>
           <div className="flex justify-between items-end mb-6">
             <div><h2 className="text-2xl font-black text-gray-800">جدیدترین محصولات</h2><p className="text-gray-500 text-sm mt-1">تازه‌ترین‌ها از غرفه‌های مختلف</p></div>
             <Link href="/products" className="text-indigo-600 text-sm font-bold hover:text-indigo-800 transition-colors flex items-center gap-1">مشاهده همه <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg></Link>
           </div>
-          <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory scrollbar-hide">{latestProducts.map(product => <ProductCard key={product.id} product={product} />)}</div>
+          <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory scrollbar-hide">
+            {latestProducts.map(product => (
+              <div key={product.id} className="w-[180px] sm:w-[220px] shrink-0 snap-start">
+                <ProductCard product={product} />
+              </div>
+            ))}
+          </div>
         </section>
 
+        {/* ✅ بازگشت به اسکرول افقی */}
         <section>
           <div className="flex justify-between items-end mb-6">
             <div><h2 className="text-2xl font-black text-gray-800">پرفروش‌ترین‌ها</h2><p className="text-gray-500 text-sm mt-1">محصولاتی که بیشترین استقبال را داشته‌اند</p></div>
             <Link href="/products?sort=best" className="text-indigo-600 text-sm font-bold hover:text-indigo-800 transition-colors flex items-center gap-1">مشاهده همه <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg></Link>
           </div>
-          <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory scrollbar-hide">{bestSellers.map(product => <ProductCard key={product.id} product={product} />)}</div>
+          <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory scrollbar-hide">
+            {bestSellers.map(product => (
+              <div key={product.id} className="w-[180px] sm:w-[220px] shrink-0 snap-start">
+                <ProductCard product={product} />
+              </div>
+            ))}
+          </div>
         </section>
 
         <section>

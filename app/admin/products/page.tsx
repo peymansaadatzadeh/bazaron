@@ -1,20 +1,28 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { supabase } from '../../../lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function AdminProductsPage() {
+function AdminProductsContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  
+  const initialTab = searchParams.get('tab') || 'pending_approval'
+  const [activeTab, setActiveTab] = useState(initialTab)
+  
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('pending_approval')
   const [message, setMessage] = useState('')
-  const router = useRouter()
 
-  // استیت برای مودال رد کردن
   const [rejectingProduct, setRejectingProduct] = useState<any>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [customReason, setCustomReason] = useState('')
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab)
+    router.push(`/admin/products?tab=${tab}`)
+  }
 
   const fetchProducts = async () => {
     setLoading(true)
@@ -23,9 +31,8 @@ export default function AdminProductsPage() {
       .select('*')
       .order('created_at', { ascending: false })
 
-    if (error) {
-      setMessage(`خطای دیتابیس: ${error.message}`)
-    } else if (data) {
+    if (error) setMessage(`خطای دیتابیس: ${error.message}`)
+    else if (data) {
       setProducts(data)
       setMessage('')
     }
@@ -44,9 +51,8 @@ export default function AdminProductsPage() {
       .update({ status: 'active', rejection_reason: null })
       .eq('id', id)
 
-    if (error) {
-      alert(`خطا در تایید: ${error.message}`)
-    } else {
+    if (error) alert(`خطا در تایید: ${error.message}`)
+    else {
       alert('محصول با موفقیت تایید شد.')
       fetchProducts()
     }
@@ -62,10 +68,9 @@ export default function AdminProductsPage() {
       .update({ status: 'rejected', rejection_reason: finalReason })
       .eq('id', rejectingProduct.id)
 
-    if (error) {
-      alert(error.message)
-    } else {
-      alert('محصول رد شد و دلیل آن برای فروشنده ثبت گردید.')
+    if (error) alert(error.message)
+    else {
+      alert('محصول رد شد و دلیل آن ثبت گردید.')
       setRejectingProduct(null)
       setRejectReason('')
       setCustomReason('')
@@ -77,7 +82,6 @@ export default function AdminProductsPage() {
 
   const filteredProducts = products.filter(p => p.status === activeTab)
 
-  // تب "غیرفعال" حذف شد
   const tabs = [
     { id: 'pending_approval', label: 'در انتظار تایید', color: 'bg-orange-500 text-white', inactive: 'bg-orange-50 text-orange-700' },
     { id: 'active', label: 'تایید شده', color: 'bg-green-600 text-white', inactive: 'bg-green-50 text-green-700' },
@@ -94,7 +98,7 @@ export default function AdminProductsPage() {
         {tabs.map(tab => (
           <button 
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)} 
+            onClick={() => handleTabChange(tab.id)} 
             className={`px-5 py-2.5 rounded-t-xl font-bold transition-colors ${activeTab === tab.id ? tab.color : tab.inactive + ' hover:opacity-80'}`}
           >
             {tab.label} ({products.filter(p => p.status === tab.id).length})
@@ -138,7 +142,6 @@ export default function AdminProductsPage() {
                           </>
                         )}
                         
-                        {/* دکمه غیرفعال به رد کردن تغییر کرد */}
                         {product.status === 'active' && (
                            <button onClick={() => setRejectingProduct(product)} className="bg-orange-50 text-orange-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-orange-600 hover:text-white transition-all">رد کردن</button>
                         )}
@@ -156,7 +159,6 @@ export default function AdminProductsPage() {
         </div>
       </div>
 
-      {/* مودال رد کردن */}
       {rejectingProduct && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
@@ -196,5 +198,13 @@ export default function AdminProductsPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function AdminProductsPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen bg-gray-50"><div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div></div>}>
+      <AdminProductsContent />
+    </Suspense>
   )
 }

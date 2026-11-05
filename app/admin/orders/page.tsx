@@ -1,16 +1,27 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { supabase } from '../../../lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function AdminOrdersPage() {
+function AdminOrdersContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  
+  // خواندن تب از URL (پیش‌فرض: در انتظار بررسی)
+  const initialTab = searchParams.get('tab') || 'pending_admin_review'
+  const [activeTab, setActiveTab] = useState(initialTab)
+
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
-  const [activeTab, setActiveTab] = useState('pending_admin_review')
   const [selectedGroup, setSelectedGroup] = useState<any[] | null>(null)
-  const router = useRouter()
+
+  // اگر کاربر داخل صفحه روی تب کلیک کرد، URL را هم آپدیت می‌کنیم تا همگام بماند
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab)
+    router.push(`/admin/orders?tab=${tab}`)
+  }
 
   const fetchOrders = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -81,11 +92,22 @@ export default function AdminOrdersPage() {
     }
   }
 
-  const handleShipOrder = async (orderId: string) => {
-    if (!confirm('آیا ارسال با پیک را تایید می‌کنید؟')) return
-    const { error } = await supabase.from('orders').update({ status: 'shipped' }).eq('id', orderId)
-    if (error) alert(error.message)
-    else { setSelectedGroup(null); fetchOrders() }
+  const handleShipGroup = async (group: any[]) => {
+    if (!confirm(`آیا ارسال ${group.length} غرفه با پیک را تایید می‌کنید؟`)) return
+    try {
+      const orderIds = group.map((o: any) => o.id)
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'shipped' })
+        .in('id', orderIds)
+
+      if (error) throw error
+      alert('همه غرفه‌های این فاکتور به وضعیت «ارسال شده» تغییر یافتند.')
+      setSelectedGroup(null)
+      fetchOrders()
+    } catch (error: any) {
+      alert(`خطا در ثبت ارسال: ${error.message}`)
+    }
   }
 
   if (loading) return <div className="text-center py-20 text-gray-500">در حال بارگذاری...</div>
@@ -100,28 +122,40 @@ export default function AdminOrdersPage() {
 
   const getUniqueGroupCount = (status: string) => {
     const uniqueGroups = new Set()
-    orders.forEach(o => { if (o.status === status) uniqueGroups.add(o.payment_group_id || o.id) })
+    orders.forEach(o => {
+      const gid = o.payment_group_id || o.id
+      if (status === 'delivered') {
+        if (o.status === 'shipped' || o.status === 'delivered') uniqueGroups.add(gid)
+      } else if (o.status === status) {
+        uniqueGroups.add(gid)
+      }
+    })
     return uniqueGroups.size
   }
 
-  const filteredGroups = Object.values(groupedOrders).filter((group: any) => group.some((o: any) => o.status === activeTab))
+  const filteredGroups = Object.values(groupedOrders).filter((group: any) => {
+    if (activeTab === 'delivered') {
+      return group.some((o: any) => o.status === 'shipped' || o.status === 'delivered')
+    }
+    return group.some((o: any) => o.status === activeTab)
+  })
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-800 mb-6">مدیریت سفارشات</h1>
       
       <div className="flex flex-wrap gap-2 mb-6 border-b pb-2">
-        <button onClick={() => setActiveTab('pending_admin_review')} className={`px-5 py-2.5 rounded-t-xl font-bold transition-colors ${activeTab === 'pending_admin_review' ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-700 hover:bg-orange-100'}`}>
+        <button onClick={() => handleTabChange('pending_admin_review')} className={`px-5 py-2.5 rounded-t-xl font-bold transition-colors ${activeTab === 'pending_admin_review' ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-700 hover:bg-orange-100'}`}>
           در انتظار بررسی ({getUniqueGroupCount('pending_admin_review')})
         </button>
-        <button onClick={() => setActiveTab('pending_payment')} className={`px-5 py-2.5 rounded-t-xl font-bold transition-colors ${activeTab === 'pending_payment' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>
+        <button onClick={() => handleTabChange('pending_payment')} className={`px-5 py-2.5 rounded-t-xl font-bold transition-colors ${activeTab === 'pending_payment' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>
           در انتظار پرداخت ({getUniqueGroupCount('pending_payment')})
         </button>
-        <button onClick={() => setActiveTab('paid')} className={`px-5 py-2.5 rounded-t-xl font-bold transition-colors ${activeTab === 'paid' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}>
+        <button onClick={() => handleTabChange('paid')} className={`px-5 py-2.5 rounded-t-xl font-bold transition-colors ${activeTab === 'paid' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}>
           آماده ارسال ({getUniqueGroupCount('paid')})
         </button>
-        <button onClick={() => setActiveTab('shipped')} className={`px-5 py-2.5 rounded-t-xl font-bold transition-colors ${activeTab === 'shipped' ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-700 hover:bg-purple-100'}`}>
-          ارسال شده ({getUniqueGroupCount('shipped')})
+        <button onClick={() => handleTabChange('delivered')} className={`px-5 py-2.5 rounded-t-xl font-bold transition-colors ${activeTab === 'delivered' ? 'bg-teal-600 text-white' : 'bg-teal-50 text-teal-700 hover:bg-teal-100'}`}>
+          ارسال / تحویل ({getUniqueGroupCount('delivered')})
         </button>
       </div>
 
@@ -136,6 +170,7 @@ export default function AdminOrdersPage() {
                   <th className="p-4 font-bold">تاریخ</th>
                   <th className="p-4 font-bold">کد فاکتور</th>
                   <th className="p-4 font-bold">تعداد غرفه</th>
+                  <th className="p-4 font-bold">وضعیت</th>
                   <th className="p-4 font-bold">مبلغ کل</th>
                   <th className="p-4 font-bold text-center">عملیات</th>
                 </tr>
@@ -144,11 +179,22 @@ export default function AdminOrdersPage() {
                 {filteredGroups.map((group: any) => {
                   const firstOrder = group[0]
                   const totalGroupAmount = group.reduce((sum: number, o: any) => sum + o.total_amount, 0)
+                  const allDelivered = group.every((o: any) => o.status === 'delivered')
+                  const groupStatusLabel = activeTab === 'delivered'
+                    ? (allDelivered ? 'تحویل داده شده' : 'در حال ارسال')
+                    : null
                   return (
                     <tr key={firstOrder.payment_group_id || firstOrder.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="p-4 text-sm text-gray-700">{new Date(firstOrder.created_at).toLocaleDateString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</td>
                       <td className="p-4 font-mono text-xs text-gray-500">{(firstOrder.payment_group_id || firstOrder.id).split('-')[0].toUpperCase()}</td>
                       <td className="p-4 text-sm font-bold text-gray-600">{group.length} غرفه</td>
+                      <td className="p-4">
+                        {groupStatusLabel && (
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${allDelivered ? 'bg-teal-100 text-teal-700' : 'bg-purple-100 text-purple-700'}`}>
+                            {groupStatusLabel}
+                          </span>
+                        )}
+                      </td>
                       <td className="p-4 font-bold text-gray-800">{totalGroupAmount.toLocaleString()} <span className="text-xs font-normal text-gray-400">تومان</span></td>
                       <td className="p-4 text-center">
                         <button onClick={() => setSelectedGroup(group)} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-colors">
@@ -164,18 +210,14 @@ export default function AdminOrdersPage() {
         </div>
       )}
 
-      {/* پاپ‌آپ جزئیات */}
       {selectedGroup && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-fade-in-up">
-            
             <div className="bg-white p-5 border-b flex justify-between items-center z-10">
               <div>
                 <h3 className="font-bold text-lg text-gray-800">جزئیات فاکتور</h3>
                 <div className="flex items-center gap-3 text-xs text-gray-500 font-mono mt-1">
                   <span>کد: {(selectedGroup[0].payment_group_id || selectedGroup[0].id).split('-')[0].toUpperCase()}</span>
-                  <span className="w-px h-3 bg-gray-300"></span>
-                  <span>{new Date(selectedGroup[0].created_at).toLocaleDateString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
               </div>
               <button onClick={() => setSelectedGroup(null)} className="text-gray-400 hover:text-red-500 bg-gray-50 p-2 rounded-full transition-colors">
@@ -184,8 +226,7 @@ export default function AdminOrdersPage() {
             </div>
             
             <div className="p-4 overflow-y-auto space-y-4 bg-gray-50">
-              {/* این شرط تغییر کرد: حالا در هر دو تب آماده ارسال و ارسال شده، اطلاعات مشتری نمایش داده می‌شود */}
-              {(activeTab === 'paid' || activeTab === 'shipped') && (
+              {(activeTab === 'paid' || activeTab === 'delivered') && (
                 <div className="bg-yellow-50 text-yellow-800 border border-yellow-200 p-4 rounded-2xl text-sm mb-4">
                   <h4 className="font-bold text-yellow-900 mb-2 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
@@ -206,11 +247,6 @@ export default function AdminOrdersPage() {
                 <div key={order.id} className="border border-gray-200 rounded-2xl overflow-hidden bg-white">
                   <div className="bg-indigo-50 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
                     <span className="font-bold text-indigo-800 text-sm">غرفه: {order.stores?.name}</span>
-                    {order.stores?.phone_number && (
-                      <a href={`tel:${order.stores.phone_number}`} className="flex items-center gap-1.5 bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1 rounded-lg transition-colors text-xs font-bold border border-green-200">
-                        تماس با غرفه دار
-                      </a>
-                    )}
                   </div>
                   <div className="flex flex-col">
                     {order.order_items.map((item: any) => {
@@ -247,12 +283,30 @@ export default function AdminOrdersPage() {
               )}
 
               {activeTab === 'paid' && (
-                <button onClick={() => handleShipOrder(selectedGroup[0].id)} className="w-full sm:w-auto bg-green-600 text-white px-8 py-3 rounded-xl hover:bg-green-700 font-bold shadow-md transition-all text-sm">ارسال با پیک (ثبت ارسال)</button>
+                <button onClick={() => handleShipGroup(selectedGroup)} className="w-full sm:w-auto bg-green-600 text-white px-8 py-3 rounded-xl hover:bg-green-700 font-bold shadow-md transition-all text-sm">
+                  ارسال کل فاکتور با پیک ({selectedGroup.length} غرفه)
+                </button>
+              )}
+
+              {activeTab === 'delivered' && (
+                selectedGroup.every((o: any) => o.status === 'delivered') ? (
+                  <span className="text-sm font-bold text-teal-600 bg-teal-50 px-4 py-2 rounded-xl">✓ این فاکتور تحویل داده شده است</span>
+                ) : (
+                  <span className="text-sm font-bold text-purple-600 bg-purple-50 px-4 py-2 rounded-xl">⏳ در انتظار تأیید دریافت توسط مشتری</span>
+                )
               )}
             </div>
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+export default function AdminOrdersPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen bg-gray-50"><div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div></div>}>
+      <AdminOrdersContent />
+    </Suspense>
   )
 }

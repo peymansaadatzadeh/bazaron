@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabase'
 import Link from 'next/link'
 
 export default function StoreDashboard() {
+  // ✅ استیت جدید برای کل فروش
   const [stats, setStats] = useState({ products: 0, orders: 0, grossSales: 0, netSales: 0, commissions: 0 })
   const [loading, setLoading] = useState(true)
 
@@ -18,16 +19,17 @@ export default function StoreDashboard() {
 
       const { count: pCount } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('store_id', storeData.id)
       
-      // گرفتن تمام فاکتورهای پرداخت شده این غرفه
+      // ✅ گرفتن subtotal هم برای محاسبه کل فروش (بدون هزینه ارسال)
       const { data: oData } = await supabase
         .from('orders')
-        .select('total_amount, seller_net_amount, commission_amount')
+        .select('subtotal, total_amount, seller_net_amount, commission_amount')
         .eq('store_id', storeData.id)
-        .eq('status', 'paid')
+        .in('status', ['paid', 'shipped', 'delivered']) 
       
-      const grossSales = oData?.reduce((sum, o) => sum + o.total_amount, 0) || 0
-      const netSales = oData?.reduce((sum, o) => sum + o.seller_net_amount, 0) || 0
-      const commissions = oData?.reduce((sum, o) => sum + o.commission_amount, 0) || 0
+      // محاسبه مجموع‌ها
+      const grossSales = oData?.reduce((sum, o) => sum + (o.subtotal || 0), 0) || 0
+      const netSales = oData?.reduce((sum, o) => sum + (o.seller_net_amount || 0), 0) || 0
+      const commissions = oData?.reduce((sum, o) => sum + (o.commission_amount || 0), 0) || 0
 
       setStats({
         products: pCount || 0,
@@ -55,30 +57,44 @@ export default function StoreDashboard() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center">
+      {/* ✅ تغییر چیدمان به ۵ ستون در مانیتورهای بزرگ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        
+        {/* ۱. تعداد محصولات */}
+        <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex flex-col items-center text-center">
           <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mb-4"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></div>
-          <h3 className="text-gray-500 text-sm font-medium">تعداد محصولات</h3>
-          <p className="text-3xl font-black text-gray-800 mt-2">{stats.products}</p>
+          <h3 className="text-gray-500 text-xs font-medium">تعداد محصولات</h3>
+          <p className="text-2xl font-black text-gray-800 mt-2">{stats.products}</p>
         </div>
         
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center">
+        {/* ۲. سفارشات موفق */}
+        <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex flex-col items-center text-center">
           <div className="w-12 h-12 bg-green-50 text-green-600 rounded-full flex items-center justify-center mb-4"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg></div>
-          <h3 className="text-gray-500 text-sm font-medium">سفارشات موفق</h3>
-          <p className="text-3xl font-black text-gray-800 mt-2">{stats.orders}</p>
+          <h3 className="text-gray-500 text-xs font-medium">سفارشات موفق</h3>
+          <p className="text-2xl font-black text-gray-800 mt-2">{stats.orders}</p>
         </div>
 
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center">
-          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
-          <h3 className="text-gray-500 text-sm font-medium">فروش خالص (واریزی)</h3>
-          <p className="text-xl font-black text-green-600 mt-2">{stats.netSales.toLocaleString()} <span className="text-xs font-normal text-gray-400">تومان</span></p>
+        {/* ۳. کل فروش */}
+        <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex flex-col items-center text-center">
+          <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mb-4"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg></div>
+          <h3 className="text-gray-500 text-xs font-medium">کل فروش</h3>
+          <p className="text-lg font-black text-purple-700 mt-2">{stats.grossSales.toLocaleString()} <span className="text-[10px] font-normal text-gray-400">تومان</span></p>
         </div>
 
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center">
-          <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center mb-4"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg></div>
-          <h3 className="text-gray-500 text-sm font-medium">کمیسیون پرداختی</h3>
-          <p className="text-xl font-black text-orange-500 mt-2">{stats.commissions.toLocaleString()} <span className="text-xs font-normal text-gray-400">تومان</span></p>
+        {/* ۴. کمیسیون پرداختی */}
+        <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex flex-col items-center text-center">
+          <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mb-4"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg></div>
+          <h3 className="text-gray-500 text-xs font-medium">کمیسیون پرداختی</h3>
+          <p className="text-lg font-black text-red-500 mt-2">{stats.commissions.toLocaleString()} <span className="text-[10px] font-normal text-gray-400">تومان</span></p>
         </div>
+
+        {/* ۵. سود خالص */}
+        <div className="bg-white rounded-3xl p-5 shadow-sm border border-green-200 bg-green-50/30 flex flex-col items-center text-center">
+          <div className="w-12 h-12 bg-green-100 text-green-700 rounded-full flex items-center justify-center mb-4"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
+          <h3 className="text-gray-700 text-xs font-bold">سود خالص (واریزی)</h3>
+          <p className="text-lg font-black text-green-600 mt-2">{stats.netSales.toLocaleString()} <span className="text-[10px] font-normal text-gray-400">تومان</span></p>
+        </div>
+
       </div>
     </div>
   )

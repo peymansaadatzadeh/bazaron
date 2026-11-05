@@ -29,15 +29,11 @@ function RegisterForm() {
       setMessage(`خطا در ثبت‌نام: ${authError.message}`)
       setLoading(false)
     } else {
-      setMessage('ثبت‌نام با موفقیت انجام شد! در حال انتقال به صفحه ورود...')
+      setMessage('ثبت‌نام با موفقیت انجام شد! در حال انتقال...')
+      // انتقال مستقیم به صفحه تکمیل اطلاعات
       setTimeout(() => {
-        // انتقال به صفحه لاگین همراه با پارامتر redirect
-        if (redirectUrl) {
-          router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`)
-        } else {
-          router.push('/login')
-        }
-      }, 2000)
+        router.push(`/complete-profile?redirect=${encodeURIComponent(redirectUrl || '/dashboard')}`)
+      }, 1000)
     }
   }
 

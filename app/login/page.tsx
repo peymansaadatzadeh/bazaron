@@ -12,7 +12,6 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   
-  // گرفتن آدرس مقصد از URL (اگر وجود داشته باشد)
   const searchParams = useSearchParams()
   const redirectUrl = searchParams.get('redirect')
 
@@ -31,9 +30,20 @@ function LoginForm() {
       setLoading(false)
     } else {
       setMessage('ورود موفقیت‌آمیز بود! در حال انتقال...')
-      setLoading(false)
-      router.refresh()
       
+      // چک کردن اطلاعات کاربر
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        const { data: profile } = await supabase.from('profiles').select('first_name').eq('id', session.user.id).single()
+        
+        // اگر نام کاربر خالی بود (یعنی ثبت‌نامش را تکمیل نکرده)
+        if (!profile?.first_name || profile.first_name === '') {
+          router.push('/complete-profile')
+          return
+        }
+      }
+
+      router.refresh()
       // اگر آدرس مقصدی وجود داشت، برو اونجا. وگرنه برو داشبورد
       if (redirectUrl) {
         router.push(decodeURIComponent(redirectUrl))
@@ -46,7 +56,6 @@ function LoginForm() {
   return (
     <div dir="rtl" className="flex min-h-screen items-center justify-center bg-gray-50 p-4 relative overflow-hidden">
       
-      {/* بک‌گراند دکوراتیو */}
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-indigo-100 rounded-full mix-blend-multiply filter blur-3xl opacity-70"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl opacity-70"></div>
 
@@ -105,7 +114,6 @@ function LoginForm() {
 
         <div className="mt-8 text-center text-sm text-gray-600 border-t border-gray-100 pt-6">
           حساب کاربری ندارید؟{' '}
-          {/* انتقال پارامتر redirect به صفحه ثبت‌نام هم */}
           <Link href={redirectUrl ? `/register?redirect=${encodeURIComponent(redirectUrl)}` : '/register'} className="text-indigo-600 font-bold hover:text-indigo-800 transition-colors">
             همین حالا ثبت‌نام کنید
           </Link>

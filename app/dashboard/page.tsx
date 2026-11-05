@@ -1,236 +1,146 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
-import Link from 'next/link'
+import { supabase } from '../../lib/supabase' // مسیر ایمپورت درست برای این پوشه
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
-export default function UserDashboardPage() {
-  const [orderStats, setOrderStats] = useState({ all: 0, pending: 0, shipped: 0, completed: 0, cancelled: 0 })
-  const [followedStoresData, setFollowedStoresData] = useState<any[]>([])
-  const [favoriteProducts, setFavoriteProducts] = useState<any[]>([])
+export default function CustomerDashboard() {
   const [loading, setLoading] = useState(true)
+  const [userName, setUserName] = useState('کاربر')
+  const [hasStore, setHasStore] = useState(false)
+  
+  // آمار مشتری
+  const [stats, setStats] = useState({
+    orders: 0,
+    favorites: 0,
+    messages: 0
+  })
+
   const router = useRouter()
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { router.push('/login'); return }
-
-      // ۱. آمار سفارشات
-      const { data: ordersData } = await supabase.from('orders').select('status').eq('customer_id', session.user.id)
-      if (ordersData) {
-        setOrderStats({
-          all: ordersData.length,
-          pending: ordersData.filter(o => o.status === 'pending_payment' || o.status === 'pending_seller' || o.status === 'pending_admin_review').length,
-          shipped: ordersData.filter(o => o.status === 'shipped').length,
-          completed: ordersData.filter(o => o.status === 'delivered').length,
-          cancelled: ordersData.filter(o => o.status === 'cancelled').length
-        })
+      if (!session) {
+        router.push('/login')
+        return
       }
 
-      // ۲. محصولات مورد علاقه
-      const { data: favsData } = await supabase
-        .from('product_favorites')
-        .select('product_id, products(*, stores(name))')
-        .eq('customer_id', session.user.id)
-        .order('created_at', { ascending: false })
-        .limit(12) // کمی بیشتر بگیریم که دو خط پر بشه
+      // ۱. گرفتن نام کاربر
+      const { data: profile } = await supabase.from('profiles').select('full_name, first_name').eq('id', session.user.id).single()
+      if (profile?.full_name) setUserName(profile.full_name)
+      else if (profile?.first_name) setUserName(profile.first_name)
+
+      // ۲. چک کردن اینکه آیا کاربر غرفه دارد یا نه
+      const { data: store } = await supabase.from('stores').select('id').eq('owner_id', session.user.id).maybeSingle()
+      if (store) setHasStore(true)
+
+      // ۳. گرفتن آمار مشتری
+      // تعداد سفارش‌ها (بر اساس گروه فاکتور)
+      const { data: orders } = await supabase.from('orders').select('payment_group_id, id').eq('customer_id', session.user.id)
+      const uniqueGroups = new Set(orders?.map(o => o.payment_group_id || o.id))
       
-      if (favsData) {
-        setFavoriteProducts(favsData.map((f: any) => f.products).filter(Boolean))
-      }
+      // تعداد علاقه‌مندی‌ها
+      const { count: favCount } = await supabase.from('product_favorites').select('*', { count: 'exact', head: true }).eq('customer_id', session.user.id)
+      
+      // تعداد پیام‌های دریافتی
+      const { count: msgCount } = await supabase.from('messages').select('*', { count: 'exact', head: true }).eq('receiver_id', session.user.id)
 
-      // ۳. محصولات فروشگاه‌های دنبال شده (دسته‌بندی شده)
-      const { data: followData } = await supabase
-        .from('store_followers')
-        .select('store_id')
-        .eq('customer_id', session.user.id)
-
-      if (followData && followData.length > 0) {
-        const followedStoreIds = followData.map((f: any) => f.store_id)
-
-        const { data: storesData } = await supabase
-          .from('stores')
-          .select('id, name, logo_url')
-          .in('id', followedStoreIds)
-
-        const { data: allProducts } = await supabase
-          .from('products')
-          .select('*')
-          .in('store_id', followedStoreIds)
-          .eq('status', 'active')
-          .order('created_at', { ascending: false })
-
-        if (storesData && allProducts) {
-          const groupedData = storesData.map(store => {
-            const storeProducts = allProducts.filter(p => p.store_id === store.id).slice(0, 6)
-            return { ...store, products: storeProducts }
-          })
-          .filter(store => store.products.length > 0)
-          .sort((a, b) => {
-            const dateA = new Date(a.products[0].created_at).getTime()
-            const dateB = new Date(b.products[0].created_at).getTime()
-            return dateB - dateA
-          })
-          
-          setFollowedStoresData(groupedData)
-        }
-      }
+      setStats({
+        orders: uniqueGroups.size,
+        favorites: favCount || 0,
+        messages: msgCount || 0
+      })
 
       setLoading(false)
     }
+
     fetchDashboardData()
   }, [router])
 
-  if (loading) return <div className="text-center py-20 text-gray-500">در حال بارگذاری...</div>
+  if (loading) return <div className="flex justify-center items-center min-h-screen bg-gray-50"><div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div></div>
 
   return (
-    <div className="space-y-8 pb-10">
+    <div className="space-y-6">
       
-      {/* بخش سفارشات من */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-800">سفارشات من</h2>
-          <Link href="/dashboard/my-orders" className="text-sm text-indigo-600 font-bold hover:underline">مشاهده همه</Link>
+      {/* هدر خوش‌آمدگویی */}
+      <div className="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-3xl p-8 shadow-lg text-white flex flex-col md:flex-row justify-between items-center gap-6">
+        <div>
+          <h1 className="text-3xl font-black mb-2">سلام {userName} عزیز! 👋</h1>
+          <p className="text-indigo-100 text-sm">به پنل کاربری بازار متل قو خوش آمدید. از اینجا می‌توانید فعالیت‌های خود را مدیریت کنید.</p>
         </div>
         
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <Link href="/dashboard/my-orders" className="flex flex-col items-center justify-center p-4 rounded-2xl hover:bg-gray-50 transition-colors group">
-            <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform relative">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-            </div>
-            <span className="text-sm font-bold text-gray-700">همه</span>
-            <span className="text-xs text-gray-400 mt-1">({orderStats.all})</span>
+        {/* دکمه ایجاد یا مدیریت فروشگاه */}
+        {hasStore ? (
+          <Link href="/dashboard/store-panel" className="bg-white text-indigo-600 px-6 py-3 rounded-xl font-bold hover:bg-gray-50 transition-colors shadow-md whitespace-nowrap">
+            ورود به پنل فروشندگی
           </Link>
-
-          <Link href="/dashboard/my-orders" className="flex flex-col items-center justify-center p-4 rounded-2xl hover:bg-gray-50 transition-colors group">
-            <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            </div>
-            <span className="text-sm font-bold text-gray-700">در انتظار تایید</span>
-            <span className="text-xs text-gray-400 mt-1">({orderStats.pending})</span>
-          </Link>
-
-          <Link href="/dashboard/my-orders" className="flex flex-col items-center justify-center p-4 rounded-2xl hover:bg-gray-50 transition-colors group">
-            <div className="w-16 h-16 bg-yellow-100 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" /></svg>
-            </div>
-            <span className="text-sm font-bold text-gray-700">ارسال شده</span>
-            <span className="text-xs text-gray-400 mt-1">({orderStats.shipped})</span>
-          </Link>
-
-          <Link href="/dashboard/my-orders" className="flex flex-col items-center justify-center p-4 rounded-2xl hover:bg-gray-50 transition-colors group">
-            <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            </div>
-            <span className="text-sm font-bold text-gray-700">تکمیل شده</span>
-            <span className="text-xs text-gray-400 mt-1">({orderStats.completed})</span>
-          </Link>
-
-          <Link href="/dashboard/my-orders" className="flex flex-col items-center justify-center p-4 rounded-2xl hover:bg-gray-50 transition-colors group">
-            <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            </div>
-            <span className="text-sm font-bold text-gray-700">لغو شده</span>
-            <span className="text-xs text-gray-400 mt-1">({orderStats.cancelled})</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* بخش محصولات مورد علاقه (دو خطی با اسکرول و دکمه مشاهده همه) */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-800">محصولات مورد علاقه من</h2>
-          {favoriteProducts.length > 0 && (
-            <Link href="/dashboard/favorites" className="text-sm text-indigo-600 font-bold hover:underline">مشاهده همه</Link>
-          )}
-        </div>
-        
-        {favoriteProducts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 bg-gray-50 rounded-2xl border border-gray-100">
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-             <p className="text-gray-500 font-medium">هنوز محصولی را لایک نکرده‌اید.</p>
-          </div>
         ) : (
-          <div className="grid grid-rows-2 grid-flow-col auto-cols-[160px] sm:auto-cols-[200px] gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide">
-            {favoriteProducts.map((product) => (
-              <Link key={product.id} href={`/product/${product.id}`} className="group bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden border border-gray-100 flex flex-col snap-start shrink-0 w-full">
-                <div className="h-32 bg-gray-100 relative overflow-hidden flex items-center justify-center">
-                  {product.image_url ? (
-                    <img src={product.image_url} alt={product.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-                  ) : (
-                    <span className="text-xs text-gray-400">بدون عکس</span>
-                  )}
-                </div>
-                <div className="p-3">
-                  <h4 className="font-bold text-gray-800 mb-1 truncate text-sm">{product.title}</h4>
-                  <p className="text-[10px] text-gray-500 mb-2">{product.stores?.name}</p>
-                  <span className="font-black text-indigo-600 text-sm">{product.price.toLocaleString()} <span className="text-[10px] font-normal">تومان</span></span>
-                </div>
-              </Link>
-            ))}
-          </div>
+          <Link href="/dashboard/create-store" className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition-colors shadow-md whitespace-nowrap flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+            ایجاد فروشگاه جدید
+          </Link>
         )}
       </div>
 
-      {/* بخش محصولات فروشگاه‌های دنبال شده */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
-        <h2 className="text-xl font-bold text-gray-800 mb-6">آخرین محصولات فروشگاه‌های دنبال شده</h2>
+      {/* کارت‌های آمار */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
-        {followedStoresData.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 bg-gray-50 rounded-2xl border border-gray-100">
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-             <p className="text-gray-500 font-medium">هنوز فروشگاهی را دنبال نکرده‌اید.</p>
-             <Link href="/stores" className="mt-4 bg-indigo-50 text-indigo-600 px-6 py-2 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-colors">مشاهده همه غرفه‌ها</Link>
+        {/* کارت سفارش‌ها */}
+        <Link href="/dashboard/my-orders" className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group flex items-center gap-4">
+          <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
           </div>
-        ) : (
-          <div className="space-y-8">
-            {followedStoresData.map((storeData) => (
-              <div key={storeData.id} className="border border-gray-100 rounded-2xl overflow-hidden bg-gray-50/50">
-                
-                <div className="bg-white p-4 border-b border-gray-100 flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-bold overflow-hidden border border-indigo-100">
-                      {storeData.logo_url ? <img src={storeData.logo_url} className="w-full h-full object-cover" /> : storeData.name.charAt(0)}
-                    </div>
-                    <Link href={`/store/${storeData.id}`} className="font-bold text-gray-800 hover:text-indigo-600 transition-colors">
-                      {storeData.name}
-                    </Link>
-                  </div>
-                  <Link href={`/store/${storeData.id}`} className="text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors">
-                    رفتن به غرفه
-                  </Link>
-                </div>
-
-                <div className="p-4 flex overflow-x-auto gap-4 snap-x snap-mandatory scrollbar-hide">
-                  {storeData.products.map((product: any) => (
-                    <Link key={product.id} href={`/product/${product.id}`} className="group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden border border-gray-100 flex flex-col w-[180px] shrink-0 snap-start">
-                      <div className="h-28 bg-gray-100 relative overflow-hidden flex items-center justify-center">
-                        {product.image_url ? (
-                          <img src={product.image_url} alt={product.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-                        ) : (
-                          <span className="text-xs text-gray-400">بدون عکس</span>
-                        )}
-                      </div>
-                      <div className="p-3">
-                        <h4 className="font-bold text-gray-800 mb-1 truncate text-xs">{product.title}</h4>
-                        <span className="font-black text-indigo-600 text-sm">{product.price.toLocaleString()} <span className="text-[10px] font-normal">تومان</span></span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-
-              </div>
-            ))}
+          <div>
+            <h3 className="text-gray-500 text-sm font-bold">سفارش‌های من</h3>
+            <p className="text-2xl font-black text-gray-800">{stats.orders} <span className="text-xs font-normal text-gray-400">فاکتور</span></p>
           </div>
-        )}
+        </Link>
+
+        {/* کارت علاقه‌مندی‌ها */}
+        <Link href="/dashboard/favorites" className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group flex items-center gap-4">
+          <div className="w-14 h-14 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+          </div>
+          <div>
+            <h3 className="text-gray-500 text-sm font-bold">علاقه‌مندی‌ها</h3>
+            <p className="text-2xl font-black text-gray-800">{stats.favorites} <span className="text-xs font-normal text-gray-400">محصول</span></p>
+          </div>
+        </Link>
+
+        {/* کارت پیام‌ها */}
+        <Link href="/dashboard/messages" className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group flex items-center gap-4">
+          <div className="w-14 h-14 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+          </div>
+          <div>
+            <h3 className="text-gray-500 text-sm font-bold">پیام‌های دریافتی</h3>
+            <p className="text-2xl font-black text-gray-800">{stats.messages} <span className="text-xs font-normal text-gray-400">پیام</span></p>
+          </div>
+        </Link>
+
       </div>
 
-      <style jsx global>{`
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-      `}</style>
+      {/* بخش لینک‌های سریع */}
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+        <h2 className="font-bold text-gray-800 mb-4 border-b pb-2">دسترسی سریع</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Link href="/" className="bg-gray-50 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 p-4 rounded-xl font-bold text-sm text-center transition-colors">
+            رفتن به فروشگاه
+          </Link>
+          <Link href="/dashboard/profile" className="bg-gray-50 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 p-4 rounded-xl font-bold text-sm text-center transition-colors">
+            ویرایش پروفایل
+          </Link>
+          <Link href="/cart" className="bg-gray-50 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 p-4 rounded-xl font-bold text-sm text-center transition-colors">
+            سبد خرید
+          </Link>
+          <Link href="/products" className="bg-gray-50 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 p-4 rounded-xl font-bold text-sm text-center transition-colors">
+            مشاهده همه محصولات
+          </Link>
+        </div>
+      </div>
+
     </div>
   )
 }

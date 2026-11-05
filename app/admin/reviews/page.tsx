@@ -1,16 +1,25 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { supabase } from '../../../lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
-export default function AdminReviewsPage() {
+function AdminReviewsContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
+  const initialTab = searchParams.get('tab') || 'pending'
+  const [activeTab, setActiveTab] = useState(initialTab)
+
   const [reviews, setReviews] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
-  const [activeTab, setActiveTab] = useState('pending')
-  const router = useRouter()
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab)
+    router.push(`/admin/reviews?tab=${tab}`)
+  }
 
   const fetchReviews = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -53,12 +62,11 @@ export default function AdminReviewsPage() {
     <div>
       <h1 className="text-2xl font-bold text-gray-800 mb-6">مدیریت نظرات کاربران</h1>
 
-      {/* تب‌ها - "همه نظرات" حذف شد */}
       <div className="flex flex-wrap gap-2 mb-6 border-b pb-2">
-        <button onClick={() => setActiveTab('pending')} className={`px-5 py-2.5 rounded-t-xl font-bold transition-colors ${activeTab === 'pending' ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-700 hover:bg-orange-100'}`}>
+        <button onClick={() => handleTabChange('pending')} className={`px-5 py-2.5 rounded-t-xl font-bold transition-colors ${activeTab === 'pending' ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-700 hover:bg-orange-100'}`}>
           در انتظار تایید ({countStatus('pending')})
         </button>
-        <button onClick={() => setActiveTab('approved')} className={`px-5 py-2.5 rounded-t-xl font-bold transition-colors ${activeTab === 'approved' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}>
+        <button onClick={() => handleTabChange('approved')} className={`px-5 py-2.5 rounded-t-xl font-bold transition-colors ${activeTab === 'approved' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}>
           تایید شده ({countStatus('approved')})
         </button>
       </div>
@@ -112,5 +120,13 @@ export default function AdminReviewsPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function AdminReviewsPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen bg-gray-50"><div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div></div>}>
+      <AdminReviewsContent />
+    </Suspense>
   )
 }

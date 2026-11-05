@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import ProductCard from '../../components/ProductCard'
 
 export default function FavoritesPage() {
   const [products, setProducts] = useState<any[]>([])
@@ -15,15 +16,14 @@ export default function FavoritesPage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.push('/login'); return }
 
-      // گرفتن همه محصولات لایک شده
+      // گرفتن فیلدهای تخفیف فروشگاه همراه با محصول
       const { data, error } = await supabase
         .from('product_favorites')
-        .select('product_id, products(*, stores(name))')
+        .select('product_id, products(*, stores(name, discount_percentage, discount_expires_at, discount_category))')
         .eq('customer_id', session.user.id)
         .order('created_at', { ascending: false })
 
       if (!error && data) {
-        // استخراج اطلاعات محصولات از داده‌های دریافتی
         const favProducts = data.map((fav: any) => fav.products).filter(Boolean)
         setProducts(favProducts)
       }
@@ -32,9 +32,8 @@ export default function FavoritesPage() {
     fetchFavorites()
   }, [router])
 
-  // تابع حذف از علاقه‌مندی‌ها (برای اینکه کاربر بتونه از همین صفحه پاک کنه)
   const handleRemoveFavorite = async (e: React.MouseEvent, productId: string) => {
-    e.preventDefault() // جلوگیری از رفتن به صفحه محصول
+    e.preventDefault() 
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
@@ -69,35 +68,12 @@ export default function FavoritesPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {products.map((product) => (
-              <Link key={product.id} href={`/product/${product.id}`} className="group bg-white rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 flex flex-col transform hover:-translate-y-1">
-                <div className="h-48 bg-gray-100 relative overflow-hidden flex items-center justify-center">
-                  {product.image_url ? (
-                    <img src={product.image_url} alt={product.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                  )}
-                </div>
-                
-                <div className="p-4 flex flex-col flex-grow">
-                  <h4 className="font-bold text-gray-800 mb-1 truncate text-base">{product.title}</h4>
-                  <p className="text-xs text-gray-500 mb-3">{product.stores?.name}</p>
-                  
-                  <div className="mt-auto flex items-center justify-between">
-                    <span className="font-black text-indigo-600 text-lg">{product.price.toLocaleString()} <span className="text-xs font-normal">تومان</span></span>
-                    
-                    {/* دکمه حذف از علاقه‌مندی‌ها */}
-                    <button 
-                      onClick={(e) => handleRemoveFavorite(e, product.id)}
-                      className="bg-red-50 text-red-500 hover:bg-red-500 hover:text-white p-2 rounded-xl transition-colors"
-                      title="حذف از علاقه‌مندی‌ها"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </Link>
+              <ProductCard 
+                key={product.id} 
+                product={product} 
+                isFavorite={true} // در این صفحه همه لایک هستند
+                onToggleFavorite={handleRemoveFavorite} // کلیک روی قلب، حذف می‌کند
+              />
             ))}
           </div>
         )}

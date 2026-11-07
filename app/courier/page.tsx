@@ -39,25 +39,21 @@ export default function CourierDashboard() {
     fetchOrders()
   }, [])
 
-  // ✅ تابع مسیریابی هوشمند (تشخیص گوشی و باز کردن لیست مسیریاب‌ها)
+  // ✅ مسیریابی هوشمند
   const handleRouting = (lat: number, lng: number) => {
     if (!lat || !lng) {
       alert('مختصات جغرافیایی این آدرس ثبت نشده است.')
       return
     }
     
-    // تشخیص سیستم‌عامل گوشی
     const isAndroid = /Android/i.test(navigator.userAgent);
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
     if (isAndroid) {
-      // در اندروید، لینک geo باعث باز شدن پنجره "انتخاب برنامه" (نشان، بلد، گوگل مپ و...) می‌شود
       window.open(`geo:${lat},${lng}?q=${lat},${lng}`, '_blank');
     } else if (isIOS) {
-      // در آیفون، اپ نقشه پیش‌فرض (Apple Maps) باز می‌شود
       window.open(`maps://?q=${lat},${lng}`, '_blank');
     } else {
-      // در کامپیوتر یا لپ‌تاپ، سایت گوگل مپس باز می‌شود
       window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
     }
   }

@@ -30,7 +30,6 @@ export default function CourierLayout({ children }: { children: React.ReactNode 
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    // ✅ استفاده از window.location برای پاک شدن کامل کش و سشن
     window.location.href = '/login' 
   }
 

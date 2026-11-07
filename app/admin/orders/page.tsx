@@ -4,18 +4,12 @@ import { useEffect, useState, Suspense } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-// ✅ تابع محاسبه کمیسیون پلکانی
 const calculateCommission = (subtotal: number) => {
   let commission = 0;
-  if (subtotal <= 2000000) {
-    commission = subtotal * 0.05;
-  } else if (subtotal <= 4000000) {
-    commission = (2000000 * 0.05) + ((subtotal - 2000000) * 0.04);
-  } else if (subtotal <= 6000000) {
-    commission = (2000000 * 0.05) + (2000000 * 0.04) + ((subtotal - 4000000) * 0.03);
-  } else {
-    commission = (2000000 * 0.05) + (2000000 * 0.04) + (2000000 * 0.03) + ((subtotal - 6000000) * 0.02);
-  }
+  if (subtotal <= 2000000) commission = subtotal * 0.05;
+  else if (subtotal <= 4000000) commission = (2000000 * 0.05) + ((subtotal - 2000000) * 0.04);
+  else if (subtotal <= 6000000) commission = (2000000 * 0.05) + (2000000 * 0.04) + ((subtotal - 4000000) * 0.03);
+  else commission = (2000000 * 0.05) + (2000000 * 0.04) + (2000000 * 0.03) + ((subtotal - 6000000) * 0.02);
   return commission;
 }
 
@@ -34,6 +28,11 @@ function AdminOrdersContent() {
   
   const [selectedCourierId, setSelectedCourierId] = useState<string>('')
   const [editedPrices, setEditedPrices] = useState<{ [key: string]: number }>({})
+
+  // ✅ استیت‌های مربوط به تغییر پیک
+  const [showReassignModal, setShowReassignModal] = useState(false)
+  const [newCourierId, setNewCourierId] = useState('')
+  const [reassigning, setReassigning] = useState(false)
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
@@ -110,7 +109,6 @@ function AdminOrdersContent() {
             
             newSubtotal += newTotalPrice;
 
-            // آپدیت آیتم فاکتور
             await supabase.from('order_items').update({ 
               unit_price: finalUnitPrice,
               total_price: newTotalPrice,
@@ -118,19 +116,11 @@ function AdminOrdersContent() {
               old_unit_price: priceChanged ? item.unit_price : item.old_unit_price
             }).eq('id', item.id)
 
-            // ✅ اگر ادمین قیمت را تغییر داد، قیمت محصول در غرفه هم آپدیت می‌شود
             if (priceChanged) {
-              await supabase.from('products').update({ 
-                price: finalUnitPrice,
-                discount_price: null // قیمت با تخفیف قبلی پاک می‌شود تا با قیمت جدید تداخل نداشته باشد
-              }).eq('id', item.product_id)
+              await supabase.from('products').update({ price: finalUnitPrice, discount_price: null }).eq('id', item.product_id)
             }
-
           } else {
-            // آپدیت آیتم فاکتور به ناموجود
             await supabase.from('order_items').update({ item_status: 'out_of_stock' }).eq('id', item.id)
-
-            // ✅ اگر ادمین کالا را ناموجود کرد، موجودی محصول در غرفه صفر می‌شود
             await supabase.from('products').update({ stock: 0 }).eq('id', item.product_id)
           }
         }
@@ -141,11 +131,8 @@ function AdminOrdersContent() {
         const effectiveRate = newSubtotal > 0 ? (newCommissionAmount / newSubtotal) : 0;
 
         await supabase.from('orders').update({
-          subtotal: newSubtotal, 
-          total_amount: newTotal,
-          commission_rate: effectiveRate,
-          commission_amount: newCommissionAmount, 
-          seller_net_amount: newSellerNetAmount,
+          subtotal: newSubtotal, total_amount: newTotal, commission_rate: effectiveRate,
+          commission_amount: newCommissionAmount, seller_net_amount: newSellerNetAmount,
           status: 'pending_payment'
         }).eq('id', order.id)
       }
@@ -159,10 +146,7 @@ function AdminOrdersContent() {
   }
 
   const handleAssignCourier = async (group: any[]) => {
-    if (!selectedCourierId) {
-      alert('لطفاً ابتدا یک پیک انتخاب کنید.')
-      return
-    }
+    if (!selectedCourierId) { alert('لطفاً ابتدا یک پیک انتخاب کنید.'); return }
     if (!confirm('آیا از تخصیص این فاکتور به پیک انتخاب شده مطمئن هستید؟')) return
     
     try {
@@ -183,6 +167,46 @@ function AdminOrdersContent() {
       fetchData()
     } catch (error: any) {
       alert(`خطا در ثبت ارسال: ${error.message}`)
+    }
+  }
+
+  // ✅ تابع تغییر پیک
+  const handleReassignCourier = async () => {
+    if (!selectedGroup || !newCourierId) {
+      alert('لطفاً پیک جدید را انتخاب کنید.')
+      return
+    }
+    
+    const currentCourierId = selectedGroup[0].courier_id
+    if (newCourierId === currentCourierId) {
+      alert('پیک انتخاب شده با پیک فعلی یکسان است.')
+      return
+    }
+
+    if (!confirm('آیا از تغییر پیک این فاکتور مطمئن هستید؟ فاکتور از پنل پیک قبلی حذف و به پیک جدید منتقل می‌شود.')) return
+
+    setReassigning(true)
+    try {
+      const orderIds = selectedGroup.map((o: any) => o.id)
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          courier_id: newCourierId,
+          assigned_at: new Date().toISOString()
+        })
+        .in('id', orderIds)
+
+      if (error) throw error
+      
+      alert('پیک با موفقیت تغییر یافت. پیک قبلی آزاد شد.')
+      setShowReassignModal(false)
+      setNewCourierId('')
+      setSelectedGroup(null)
+      fetchData()
+    } catch (error: any) {
+      alert(`خطا در تغییر پیک: ${error.message}`)
+    } finally {
+      setReassigning(false)
     }
   }
 
@@ -248,6 +272,7 @@ function AdminOrdersContent() {
                   <th className="p-4 font-bold">تعداد غرفه</th>
                   <th className="p-4 font-bold">وضعیت</th>
                   <th className="p-4 font-bold">مبلغ کل</th>
+                  {activeTab === 'delivered' && <th className="p-4 font-bold">پیک</th>}
                   <th className="p-4 font-bold text-center">عملیات</th>
                 </tr>
               </thead>
@@ -277,6 +302,9 @@ function AdminOrdersContent() {
                         )}
                       </td>
                       <td className="p-4 font-bold text-gray-800">{totalGroupAmount.toLocaleString()} <span className="text-xs font-normal text-gray-400">تومان</span></td>
+                      {activeTab === 'delivered' && (
+                        <td className="p-4 text-xs font-bold text-gray-600">{firstOrder.courier?.full_name || 'نامشخص'}</td>
+                      )}
                       <td className="p-4 text-center">
                         <button onClick={() => { setSelectedGroup(group); setSelectedCourierId(''); setEditedPrices({}); }} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-colors">
                           {activeTab === 'pending_admin_review' ? 'بررسی فاکتور' : 'مشاهده جزئیات'}
@@ -309,11 +337,25 @@ function AdminOrdersContent() {
             <div className="p-4 overflow-y-auto space-y-4 bg-gray-50">
               {(activeTab === 'delivered' || selectedGroup[0].courier_id) && selectedGroup[0].courier && (
                 <div className="bg-blue-50 text-blue-800 border border-blue-200 p-4 rounded-2xl text-sm mb-4">
-                  <h4 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                    پیک تخصیص داده شده
-                  </h4>
-                  <p>نام پیک: <strong>{selectedGroup[0].courier?.full_name}</strong> | تلفن: <strong>{selectedGroup[0].courier?.phone_number}</strong></p>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                        پیک تخصیص داده شده
+                      </h4>
+                      <p>نام پیک: <strong>{selectedGroup[0].courier?.full_name}</strong> | تلفن: <strong>{selectedGroup[0].courier?.phone_number}</strong></p>
+                    </div>
+                    {/* ✅ دکمه تغییر پیک - فقط اگر تحویل داده نشده باشد */}
+                    {selectedGroup[0].status === 'shipped' && (
+                      <button 
+                        onClick={() => { setShowReassignModal(true); setNewCourierId(''); }}
+                        className="bg-white text-blue-700 border border-blue-300 hover:bg-blue-100 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-sm whitespace-nowrap"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                        تغییر پیک
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -420,6 +462,58 @@ function AdminOrdersContent() {
                   <span className="text-sm font-bold text-purple-600 bg-purple-50 px-4 py-2 rounded-xl">⏳ در انتظار تأیید دریافت توسط مشتری</span>
                 )
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ مودال تغییر پیک */}
+      {showReassignModal && selectedGroup && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-fade-in-up">
+            <div className="bg-indigo-600 p-5 text-white">
+              <h3 className="font-bold text-lg mb-1">تغییر پیک فاکتور</h3>
+              <p className="text-indigo-100 text-sm">فاکتور از پنل پیک قبلی حذف و به پیک جدید منتقل می‌شود.</p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 text-sm">
+                <p className="text-xs text-gray-500 mb-1">پیک فعلی:</p>
+                <p className="font-bold text-gray-800">{selectedGroup[0].courier?.full_name}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">پیک جدید را انتخاب کنید *</label>
+                <select
+                  value={newCourierId}
+                  onChange={(e) => setNewCourierId(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-bold"
+                >
+                  <option value="">-- انتخاب پیک --</option>
+                  {couriers.filter(c => !c.isBusy || c.id === selectedGroup[0].courier_id).map(c => (
+                    <option key={c.id} value={c.id} disabled={c.id === selectedGroup[0].courier_id}>
+                      {c.full_name} {c.id === selectedGroup[0].courier_id ? '(پیک فعلی)' : '(آزاد)'}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-2">فقط پیک‌های آزاد در این لیست نمایش داده می‌شوند.</p>
+              </div>
+            </div>
+
+            <div className="p-5 bg-gray-50 border-t flex gap-2">
+              <button 
+                onClick={handleReassignCourier}
+                disabled={reassigning || !newCourierId}
+                className="flex-grow bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 disabled:bg-gray-400 transition-colors"
+              >
+                {reassigning ? 'در حال تغییر...' : 'تایید و تغییر پیک'}
+              </button>
+              <button 
+                onClick={() => { setShowReassignModal(false); setNewCourierId(''); }}
+                className="px-6 bg-white text-gray-700 border border-gray-200 py-3 rounded-xl font-bold hover:bg-gray-100 transition-colors"
+              >
+                انصراف
+              </button>
             </div>
           </div>
         </div>

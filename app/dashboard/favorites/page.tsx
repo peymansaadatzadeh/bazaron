@@ -16,7 +16,6 @@ export default function FavoritesPage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.push('/login'); return }
 
-      // گرفتن فیلدهای تخفیف فروشگاه همراه با محصول
       const { data, error } = await supabase
         .from('product_favorites')
         .select('product_id, products(*, stores(name, discount_percentage, discount_expires_at, discount_category))')
@@ -24,6 +23,7 @@ export default function FavoritesPage() {
         .order('created_at', { ascending: false })
 
       if (!error && data) {
+        // ✅ بدون فیلتر موجودی (محصولات ناموجود هم نمایش داده می‌شوند)
         const favProducts = data.map((fav: any) => fav.products).filter(Boolean)
         setProducts(favProducts)
       }
@@ -71,8 +71,8 @@ export default function FavoritesPage() {
               <ProductCard 
                 key={product.id} 
                 product={product} 
-                isFavorite={true} // در این صفحه همه لایک هستند
-                onToggleFavorite={handleRemoveFavorite} // کلیک روی قلب، حذف می‌کند
+                isFavorite={true}
+                onToggleFavorite={handleRemoveFavorite}
               />
             ))}
           </div>

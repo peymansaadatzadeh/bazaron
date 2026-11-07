@@ -33,8 +33,6 @@ function ProductContent() {
   const [loading, setLoading] = useState(true)
 
   const [activeImage, setActiveImage] = useState<string | null>(null)
-  const [showShippingWarning, setShowShippingWarning] = useState(false)
-  const [pendingProduct, setPendingProduct] = useState<any>(null)
   const [toastMessage, setToastMessage] = useState('')
 
   const [user, setUser] = useState<any>(null)
@@ -155,21 +153,10 @@ function ProductContent() {
 
   const finalPrice = isDiscountActive ? product?.price - (product?.price * (store?.discount_percentage / 100)) : product?.price
 
-  const handleAddToCartClick = () => {
+  // ✅ افزودن مستقیم به سبد خرید (بدون هشدار ۳۰ هزار تومانی)
+  const handleAddToCart = () => {
     if (!product || !store) return
-    const existingCartString = localStorage.getItem('marketplace_cart')
-    let cartData = existingCartString ? JSON.parse(existingCartString) : {}
-    const cartStoreIds = Object.keys(cartData)
-
-    if (cartStoreIds.length === 0 || cartData[product.store_id]) {
-      addToCartLogic();
-    } else {
-      setPendingProduct(product);
-      setShowShippingWarning(true);
-    }
-  }
-
-  const addToCartLogic = () => {
+    
     const existingCartString = localStorage.getItem('marketplace_cart')
     let cartData = existingCartString ? JSON.parse(existingCartString) : {}
 
@@ -186,12 +173,6 @@ function ProductContent() {
 
     localStorage.setItem('marketplace_cart', JSON.stringify(cartData))
     showToast('محصول با موفقیت به سبد خرید اضافه شد!');
-  }
-
-  const handleConfirmAddWithFee = () => {
-    addToCartLogic();
-    setShowShippingWarning(false);
-    setPendingProduct(null);
   }
 
   const handleSubmitReview = async (e: React.FormEvent) => {
@@ -230,20 +211,6 @@ function ProductContent() {
         </div>
       )}
 
-      {showShippingWarning && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl animate-fade-in-down">
-            <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4"><svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg></div>
-            <h3 className="text-xl font-black text-gray-800 text-center mb-2">توجه! خرید از چند غرفه</h3>
-            <p className="text-gray-600 text-center text-sm mb-6 leading-relaxed">با خرید همزمان از چند غرفه، مبلغ <span className="font-bold text-orange-600">۳۰,۰۰۰ تومان</span> هزینه جمع‌آوری خرید شما از غرفه‌های سطح شهر برای پیک به فاکتورتان اضافه می‌شود. برای ارسال رایگان، محصولات را از یک غرفه انتخاب کنید.</p>
-            <div className="flex flex-col gap-3">
-              <button onClick={handleConfirmAddWithFee} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors">تایید و افزودن به سبد خرید</button>
-              <button onClick={() => { setShowShippingWarning(false); setPendingProduct(null); }} className="w-full bg-gray-100 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-200 transition-colors">انصراف (فقط از همین غرفه خرید می‌کنم)</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showChatModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl animate-fade-in-up">
@@ -275,10 +242,8 @@ function ProductContent() {
 
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 md:p-10 flex flex-col md:flex-row gap-10 mb-10 relative overflow-hidden">
           <div className="w-full md:w-1/2 flex flex-col gap-4">
-            
             <div className="h-80 md:h-96 bg-gray-50 rounded-2xl flex items-center justify-center relative group border border-gray-200 overflow-hidden">
               
-              {/* ✅ برچسب تخفیف گرافیکی بزرگ در صفحه محصول */}
               {isDiscountActive && (
                 <div className="absolute top-4 right-4 z-20 animate-bounce-slow">
                   <div className="relative bg-gradient-to-b from-red-500 to-rose-600 text-white px-4 py-2 rounded-2xl shadow-xl shadow-red-500/40 border-2 border-red-400/50 flex items-center justify-center gap-2 backdrop-blur-md">
@@ -340,7 +305,7 @@ function ProductContent() {
                   <svg xmlns="http://www.w3.org/2000/svg" className={`h-7 w-7 ${isFavorite ? 'fill-red-500' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                 </button>
 
-                <button onClick={handleAddToCartClick} disabled={product.stock === 0} className="flex-grow bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-3.5 rounded-xl hover:shadow-lg hover:shadow-indigo-500/30 disabled:from-gray-300 disabled:to-gray-400 disabled:shadow-none font-bold text-lg transition-all transform hover:-translate-y-0.5 flex justify-center items-center gap-2">
+                <button onClick={handleAddToCart} disabled={product.stock === 0} className="flex-grow bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-3.5 rounded-xl hover:shadow-lg hover:shadow-indigo-500/30 disabled:from-gray-300 disabled:to-gray-400 disabled:shadow-none font-bold text-lg transition-all transform hover:-translate-y-0.5 flex justify-center items-center gap-2">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                   {product.stock === 0 ? 'ناموجود' : 'افزودن به سبد'}
                 </button>

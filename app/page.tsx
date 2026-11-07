@@ -35,10 +35,11 @@ export default function HomePage() {
     const fetchData = async () => {
       const storeFields = 'id, name, logo_url, discount_percentage, discount_expires_at, discount_category'
       
-      const { data: latest } = await supabase.from('products').select(`*, stores(${storeFields})`).eq('status', 'active').order('created_at', { ascending: false }).limit(10)
+      // ✅ اضافه شدن .gt('stock', 0) برای حذف محصولات ناموجود
+      const { data: latest } = await supabase.from('products').select(`*, stores(${storeFields})`).eq('status', 'active').gt('stock', 0).order('created_at', { ascending: false }).limit(10)
       if (latest) setLatestProducts(latest)
 
-      const { data: best } = await supabase.from('products').select(`*, stores(${storeFields})`).eq('status', 'active').order('stock', { ascending: true }).limit(10)
+      const { data: best } = await supabase.from('products').select(`*, stores(${storeFields})`).eq('status', 'active').gt('stock', 0).order('stock', { ascending: true }).limit(10)
       if (best) setBestSellers(best)
 
       const { data: storesData } = await supabase.from('stores').select(`*, products ( reviews ( rating, status ) )`).eq('status', 'active').is('is_suspended', false).order('created_at', { ascending: false })
@@ -92,8 +93,6 @@ export default function HomePage() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
-        
-        {/* ✅ بازگشت به اسکرول افقی */}
         <section>
           <div className="flex justify-between items-end mb-6">
             <div><h2 className="text-2xl font-black text-gray-800">جدیدترین محصولات</h2><p className="text-gray-500 text-sm mt-1">تازه‌ترین‌ها از غرفه‌های مختلف</p></div>
@@ -108,7 +107,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ✅ بازگشت به اسکرول افقی */}
         <section>
           <div className="flex justify-between items-end mb-6">
             <div><h2 className="text-2xl font-black text-gray-800">پرفروش‌ترین‌ها</h2><p className="text-gray-500 text-sm mt-1">محصولاتی که بیشترین استقبال را داشته‌اند</p></div>

@@ -58,15 +58,8 @@ export default function CartPage() {
     })
   })
 
-  // --- محاسبه هزینه‌های ارسال طبق قوانین جدید ---
-  const FREE_SHIPPING_THRESHOLD = 800000
-  const BASE_SHIPPING_FEE = 80000
-  const EXTRA_STORE_FEE = 30000
-
-  const baseShippingFee = totalProductsPrice < FREE_SHIPPING_THRESHOLD ? BASE_SHIPPING_FEE : 0
-  const extraStoresCount = storeIds.length > 1 ? storeIds.length - 1 : 0
-  const extraStoresFee = extraStoresCount * EXTRA_STORE_FEE
-  const totalShippingFee = baseShippingFee + extraStoresFee
+  // ✅ کرایه ثابت ۵۰,۰۰۰ تومانی برای همه سفارشات
+  const totalShippingFee = 50000;
   const finalTotal = totalProductsPrice + totalShippingFee
 
   return (
@@ -124,28 +117,13 @@ export default function CartPage() {
             {/* ستون سمت چپ: باکس پرداخت و قوانین (چسبان) */}
             <div className="w-full lg:w-1/3 bg-white rounded-3xl shadow-lg border-2 border-indigo-100 p-6 sticky top-24">
               
-              {/* قوانین ارسال */}
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-5 text-xs flex flex-col gap-2">
-                <span className="text-gray-700 font-medium flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  هزینه ارسال برای خریدهای زیر ۸۰۰ هزار تومان مبلغ ۸۰,۰۰۰ تومان است.
-                </span>
-                <span className="text-green-600 font-bold flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                  خریدهای بالای ۸۰۰ هزار تومان دارای ارسال رایگان هستند.
+              {/* قوانین ارسال (به‌روزرسانی شده) */}
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mb-5 text-xs flex flex-col gap-2">
+                <span className="text-indigo-800 font-bold flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  هزینه ارسال و جمع‌آوری برای تمامی سفارشات، مبلغ ثابت ۵۰,۰۰۰ تومان است.
                 </span>
               </div>
-
-              {/* هشدار خرید چند غرفه‌ای */}
-              {extraStoresCount > 0 && (
-                <div className="bg-orange-50 border border-orange-200 text-orange-800 p-3 rounded-xl flex items-start gap-2 mb-5 shadow-sm">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0 text-orange-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                  <div className="text-xs">
-                    <p className="font-bold">توجه: شما از {storeIds.length} غرفه مختلف خرید می‌کنید.</p>
-                    <p className="mt-1">هزینه پیک برای هر غرفه اضافی {EXTRA_STORE_FEE.toLocaleString()} تومان است. (مجموع: {extraStoresFee.toLocaleString()} تومان)</p>
-                  </div>
-                </div>
-              )}
 
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-sm">
@@ -153,26 +131,10 @@ export default function CartPage() {
                   <span className="font-bold text-gray-800">{totalProductsPrice.toLocaleString()}</span>
                 </div>
                 
-                {baseShippingFee > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">هزینه ارسال:</span>
-                    <span className="font-bold text-orange-600">{baseShippingFee.toLocaleString()}</span>
-                  </div>
-                )}
-
-                {extraStoresFee > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">هزینه جمع آوری:</span>
-                    <span className="font-bold text-orange-600">{extraStoresFee.toLocaleString()}</span>
-                  </div>
-                )}
-
-                {totalProductsPrice >= FREE_SHIPPING_THRESHOLD && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-green-600 font-bold">هزینه ارسال:</span>
-                    <span className="font-bold text-green-600">ارسال رایگان!</span>
-                  </div>
-                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">هزینه ارسال و جمع‌آوری:</span>
+                  <span className="font-bold text-orange-600">{totalShippingFee.toLocaleString()}</span>
+                </div>
 
                 <div className="flex justify-between items-center text-lg border-t border-gray-100 pt-3 mt-1">
                   <span className="text-gray-800 font-bold">مبلغ قابل پرداخت:</span>

@@ -64,11 +64,12 @@ function ProductsContent() {
     const from = reset ? 0 : page * ITEMS_PER_PAGE
     const to = from + ITEMS_PER_PAGE - 1
 
-    // ✅ آپدیت کوئری برای دریافت تخفیف غرفه
+    // ✅ اضافه شدن .gt('stock', 0) برای حذف محصولات ناموجود
     let query = supabase
       .from('products')
       .select('*, stores(name, discount_percentage, discount_expires_at, discount_category), reviews(rating, status)')
       .eq('status', 'active')
+      .gt('stock', 0)
       .order('created_at', { ascending: false })
       .range(from, to)
 
@@ -101,7 +102,6 @@ function ProductsContent() {
     return () => { if (observerTarget.current) observer.unobserve(observerTarget.current) }
   }, [hasMore, loading, loadingMore, page])
 
-  // منطق لایک در این صفحه
   const handleToggleFavorite = async (e: React.MouseEvent, productId: string) => {
     e.preventDefault();
     if (!user) {

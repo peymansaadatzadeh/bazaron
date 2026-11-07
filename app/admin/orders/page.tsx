@@ -4,41 +4,71 @@ import { useEffect, useState, Suspense } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 
+// ✅ تابع محاسبه کمیسیون پلکانی
+const calculateCommission = (subtotal: number) => {
+  let commission = 0;
+  if (subtotal <= 2000000) {
+    commission = subtotal * 0.05;
+  } else if (subtotal <= 4000000) {
+    commission = (2000000 * 0.05) + ((subtotal - 2000000) * 0.04);
+  } else if (subtotal <= 6000000) {
+    commission = (2000000 * 0.05) + (2000000 * 0.04) + ((subtotal - 4000000) * 0.03);
+  } else {
+    commission = (2000000 * 0.05) + (2000000 * 0.04) + (2000000 * 0.03) + ((subtotal - 6000000) * 0.02);
+  }
+  return commission;
+}
+
 function AdminOrdersContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   
-  // خواندن تب از URL (پیش‌فرض: در انتظار بررسی)
   const initialTab = searchParams.get('tab') || 'pending_admin_review'
   const [activeTab, setActiveTab] = useState(initialTab)
 
   const [orders, setOrders] = useState<any[]>([])
+  const [couriers, setCouriers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [selectedGroup, setSelectedGroup] = useState<any[] | null>(null)
+  
+  const [selectedCourierId, setSelectedCourierId] = useState<string>('')
+  const [editedPrices, setEditedPrices] = useState<{ [key: string]: number }>({})
 
-  // اگر کاربر داخل صفحه روی تب کلیک کرد، URL را هم آپدیت می‌کنیم تا همگام بماند
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
     router.push(`/admin/orders?tab=${tab}`)
   }
 
-  const fetchOrders = async () => {
+  const fetchData = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { router.push('/login'); return }
 
-    const { data, error } = await supabase
+    setLoading(true)
+
+    const { data: ordersData, error: ordersError } = await supabase
       .from('orders')
-      .select(`*, stores (name, phone_number, address), order_items (*)`)
+      .select(`*, stores (name, phone_number, address), order_items (*), courier:profiles!courier_id (full_name, phone_number)`)
       .order('created_at', { ascending: false })
 
-    if (error) setMessage(`خطا: ${error.message}`)
-    else setOrders(data || [])
+    if (ordersError) setMessage(`خطا در سفارشات: ${ordersError.message}`)
+    else setOrders(ordersData || [])
+
+    const { data: profilesData } = await supabase.from('profiles').select('*').eq('role', 'courier')
+    const { data: activeOrders } = await supabase.from('orders').select('courier_id').eq('status', 'shipped')
+    
+    const busyCourierIds = activeOrders?.map(o => o.courier_id) || []
+    const couriersWithStatus = (profilesData || []).map(c => ({
+      ...c,
+      isBusy: busyCourierIds.includes(c.id)
+    }))
+    setCouriers(couriersWithStatus)
+
     setLoading(false)
   }
 
   useEffect(() => {
-    fetchOrders()
+    fetchData()
   }, [])
 
   const setItemStatus = (orderId: string, itemId: string, newStatus: 'available' | 'out_of_stock') => {
@@ -58,7 +88,10 @@ function AdminOrdersContent() {
     return selectedGroup.reduce((total, order) => {
       let availableItemsSum = 0
       order.order_items.forEach((item: any) => {
-        if (item.item_status === 'available') availableItemsSum += item.total_price
+        if (item.item_status === 'available') {
+          const finalPrice = editedPrices[item.id] !== undefined ? editedPrices[item.id] : item.unit_price;
+          availableItemsSum += (finalPrice * item.quantity);
+        }
       })
       return total + availableItemsSum + order.shipping_cost
     }, 0)
@@ -70,47 +103,90 @@ function AdminOrdersContent() {
       for (const order of group) {
         let newSubtotal = 0
         for (const item of order.order_items) {
-          if (item.item_status === 'available') newSubtotal += item.total_price
-          else await supabase.from('order_items').update({ item_status: 'out_of_stock' }).eq('id', item.id)
+          if (item.item_status === 'available') {
+            const finalUnitPrice = editedPrices[item.id] !== undefined ? editedPrices[item.id] : item.unit_price;
+            const priceChanged = finalUnitPrice !== item.unit_price;
+            const newTotalPrice = finalUnitPrice * item.quantity;
+            
+            newSubtotal += newTotalPrice;
+
+            // آپدیت آیتم فاکتور
+            await supabase.from('order_items').update({ 
+              unit_price: finalUnitPrice,
+              total_price: newTotalPrice,
+              price_changed: priceChanged,
+              old_unit_price: priceChanged ? item.unit_price : item.old_unit_price
+            }).eq('id', item.id)
+
+            // ✅ اگر ادمین قیمت را تغییر داد، قیمت محصول در غرفه هم آپدیت می‌شود
+            if (priceChanged) {
+              await supabase.from('products').update({ 
+                price: finalUnitPrice,
+                discount_price: null // قیمت با تخفیف قبلی پاک می‌شود تا با قیمت جدید تداخل نداشته باشد
+              }).eq('id', item.product_id)
+            }
+
+          } else {
+            // آپدیت آیتم فاکتور به ناموجود
+            await supabase.from('order_items').update({ item_status: 'out_of_stock' }).eq('id', item.id)
+
+            // ✅ اگر ادمین کالا را ناموجود کرد، موجودی محصول در غرفه صفر می‌شود
+            await supabase.from('products').update({ stock: 0 }).eq('id', item.product_id)
+          }
         }
-        const commissionRate = 0.10
-        const newCommissionAmount = newSubtotal * commissionRate
-        const newSellerNetAmount = newSubtotal - newCommissionAmount
-        const newTotal = newSubtotal + order.shipping_cost
+        
+        const newCommissionAmount = calculateCommission(newSubtotal);
+        const newSellerNetAmount = newSubtotal - newCommissionAmount;
+        const newTotal = newSubtotal + order.shipping_cost;
+        const effectiveRate = newSubtotal > 0 ? (newCommissionAmount / newSubtotal) : 0;
 
         await supabase.from('orders').update({
-          subtotal: newSubtotal, total_amount: newTotal,
-          commission_amount: newCommissionAmount, seller_net_amount: newSellerNetAmount,
+          subtotal: newSubtotal, 
+          total_amount: newTotal,
+          commission_rate: effectiveRate,
+          commission_amount: newCommissionAmount, 
+          seller_net_amount: newSellerNetAmount,
           status: 'pending_payment'
         }).eq('id', order.id)
       }
-      alert('فاکتور با موفقیت تایید و برای پرداخت به مشتری ارسال شد.')
+      alert('فاکتور با موفقیت تایید شد. تغییرات قیمت و موجودی در غرفه نیز اعمال گردید.')
       setSelectedGroup(null)
-      fetchOrders()
+      setEditedPrices({})
+      fetchData()
     } catch (error: any) {
       alert(`خطا در تایید: ${error.message}`)
     }
   }
 
-  const handleShipGroup = async (group: any[]) => {
-    if (!confirm(`آیا ارسال ${group.length} غرفه با پیک را تایید می‌کنید؟`)) return
+  const handleAssignCourier = async (group: any[]) => {
+    if (!selectedCourierId) {
+      alert('لطفاً ابتدا یک پیک انتخاب کنید.')
+      return
+    }
+    if (!confirm('آیا از تخصیص این فاکتور به پیک انتخاب شده مطمئن هستید؟')) return
+    
     try {
       const orderIds = group.map((o: any) => o.id)
       const { error } = await supabase
         .from('orders')
-        .update({ status: 'shipped' })
+        .update({ 
+          status: 'shipped',
+          courier_id: selectedCourierId,
+          assigned_at: new Date().toISOString()
+        })
         .in('id', orderIds)
 
       if (error) throw error
-      alert('همه غرفه‌های این فاکتور به وضعیت «ارسال شده» تغییر یافتند.')
+      alert('فاکتور با موفقیت به پیک تخصیص داده شد.')
       setSelectedGroup(null)
-      fetchOrders()
+      setSelectedCourierId('')
+      fetchData()
     } catch (error: any) {
       alert(`خطا در ثبت ارسال: ${error.message}`)
     }
   }
 
-  if (loading) return <div className="text-center py-20 text-gray-500">در حال بارگذاری...</div>
+  if (loading) return <div className="text-center py-20 text-gray-500">در حال بارگذاری اطلاعات...</div>
   if (message) return <div className="p-8 text-center text-red-600 font-bold bg-red-50 rounded-2xl">{message}</div>
 
   const groupedOrders: any = {}
@@ -180,9 +256,14 @@ function AdminOrdersContent() {
                   const firstOrder = group[0]
                   const totalGroupAmount = group.reduce((sum: number, o: any) => sum + o.total_amount, 0)
                   const allDelivered = group.every((o: any) => o.status === 'delivered')
-                  const groupStatusLabel = activeTab === 'delivered'
-                    ? (allDelivered ? 'تحویل داده شده' : 'در حال ارسال')
-                    : null
+                  
+                  let groupStatusLabel = null
+                  if (activeTab === 'delivered') {
+                    groupStatusLabel = allDelivered ? 'تحویل داده شده' : 'در حال ارسال'
+                  } else if (activeTab === 'paid') {
+                    groupStatusLabel = 'آماده تخصیص به پیک'
+                  }
+
                   return (
                     <tr key={firstOrder.payment_group_id || firstOrder.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="p-4 text-sm text-gray-700">{new Date(firstOrder.created_at).toLocaleDateString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</td>
@@ -197,7 +278,7 @@ function AdminOrdersContent() {
                       </td>
                       <td className="p-4 font-bold text-gray-800">{totalGroupAmount.toLocaleString()} <span className="text-xs font-normal text-gray-400">تومان</span></td>
                       <td className="p-4 text-center">
-                        <button onClick={() => setSelectedGroup(group)} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-colors">
+                        <button onClick={() => { setSelectedGroup(group); setSelectedCourierId(''); setEditedPrices({}); }} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-colors">
                           {activeTab === 'pending_admin_review' ? 'بررسی فاکتور' : 'مشاهده جزئیات'}
                         </button>
                       </td>
@@ -226,11 +307,21 @@ function AdminOrdersContent() {
             </div>
             
             <div className="p-4 overflow-y-auto space-y-4 bg-gray-50">
+              {(activeTab === 'delivered' || selectedGroup[0].courier_id) && selectedGroup[0].courier && (
+                <div className="bg-blue-50 text-blue-800 border border-blue-200 p-4 rounded-2xl text-sm mb-4">
+                  <h4 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    پیک تخصیص داده شده
+                  </h4>
+                  <p>نام پیک: <strong>{selectedGroup[0].courier?.full_name}</strong> | تلفن: <strong>{selectedGroup[0].courier?.phone_number}</strong></p>
+                </div>
+              )}
+
               {(activeTab === 'paid' || activeTab === 'delivered') && (
                 <div className="bg-yellow-50 text-yellow-800 border border-yellow-200 p-4 rounded-2xl text-sm mb-4">
                   <h4 className="font-bold text-yellow-900 mb-2 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
-                    اطلاعات ارسال پیک
+                    اطلاعات ارسال و جمع‌آوری
                   </h4>
                   <p>مشتری: <strong>{selectedGroup[0].receiver_name}</strong> | تلفن: <strong>{selectedGroup[0].receiver_phone}</strong></p>
                   <p className="mt-1">آدرس مشتری: {selectedGroup[0].shipping_address}</p>
@@ -252,10 +343,25 @@ function AdminOrdersContent() {
                     {order.order_items.map((item: any) => {
                       const isOutOfStock = item.item_status === 'out_of_stock'
                       return (
-                        <div key={item.id} className={`grid grid-cols-[1fr_50px_100px_140px] items-center gap-2 p-3 border-b border-gray-50 last:border-0 ${isOutOfStock ? 'bg-red-50/30' : ''}`}>
+                        <div key={item.id} className={`grid grid-cols-[1fr_50px_120px_140px] items-center gap-2 p-3 border-b border-gray-50 last:border-0 ${isOutOfStock ? 'bg-red-50/30' : ''}`}>
                           <div className={`font-bold text-sm ${isOutOfStock ? 'line-through text-gray-400' : 'text-gray-800'}`}>{item.product_title}</div>
                           <div className="text-center text-xs bg-gray-100 text-gray-600 font-bold py-1 rounded">{item.quantity} عدد</div>
-                          <div className="text-left font-bold text-gray-700 text-sm">{item.total_price.toLocaleString()}</div>
+                          
+                          {activeTab === 'pending_admin_review' && !isOutOfStock ? (
+                            <div className="relative">
+                              <input 
+                                type="number" 
+                                value={editedPrices[item.id] !== undefined ? editedPrices[item.id] : item.unit_price}
+                                onChange={(e) => setEditedPrices({ ...editedPrices, [item.id]: Number(e.target.value) })}
+                                className={`w-full text-left font-bold text-sm border rounded-lg px-2 py-1 outline-none transition-colors ${editedPrices[item.id] !== undefined && editedPrices[item.id] !== item.unit_price ? 'border-red-400 text-red-600 bg-red-50' : 'border-gray-200 text-gray-700'}`}
+                                dir="ltr"
+                              />
+                            </div>
+                          ) : (
+                            <div className={`text-left font-bold text-sm ${isOutOfStock ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                              {item.unit_price.toLocaleString()}
+                            </div>
+                          )}
                           
                           {activeTab === 'pending_admin_review' ? (
                             <div className="flex gap-1 justify-end">
@@ -263,7 +369,10 @@ function AdminOrdersContent() {
                               <button onClick={() => setItemStatus(order.id, item.id, 'out_of_stock')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${isOutOfStock ? 'bg-red-500 text-white border-red-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-red-50'}`}>ناموجود</button>
                             </div>
                           ) : (
-                            <div className={`text-left text-xs font-bold ${isOutOfStock ? 'text-red-500' : 'text-green-600'}`}>{isOutOfStock ? 'ناموجود' : 'موجود'}</div>
+                            <div className={`text-left text-xs font-bold flex flex-col items-end ${isOutOfStock ? 'text-red-500' : 'text-green-600'}`}>
+                              {isOutOfStock ? 'ناموجود' : 'موجود'}
+                              {item.price_changed && <span className="text-[9px] text-orange-500 font-black mt-0.5 bg-orange-50 px-1 rounded">تغییر قیمت</span>}
+                            </div>
                           )}
                         </div>
                       )
@@ -279,13 +388,29 @@ function AdminOrdersContent() {
               </div>
               
               {activeTab === 'pending_admin_review' && (
-                <button onClick={() => handleApproveAndSend(selectedGroup)} className="w-full sm:w-auto bg-indigo-600 text-white px-8 py-3 rounded-xl hover:bg-indigo-700 font-bold shadow-md transition-all text-sm">تایید موجودی و ارسال برای پرداخت</button>
+                <button onClick={() => handleApproveAndSend(selectedGroup)} className="w-full sm:w-auto bg-indigo-600 text-white px-8 py-3 rounded-xl hover:bg-indigo-700 font-bold shadow-md transition-all text-sm">
+                  تایید موجودی و ارسال برای پرداخت
+                </button>
               )}
 
               {activeTab === 'paid' && (
-                <button onClick={() => handleShipGroup(selectedGroup)} className="w-full sm:w-auto bg-green-600 text-white px-8 py-3 rounded-xl hover:bg-green-700 font-bold shadow-md transition-all text-sm">
-                  ارسال کل فاکتور با پیک ({selectedGroup.length} غرفه)
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                  <select 
+                    value={selectedCourierId} 
+                    onChange={(e) => setSelectedCourierId(e.target.value)}
+                    className="bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-green-500 text-sm font-bold"
+                  >
+                    <option value="">انتخاب پیک...</option>
+                    {couriers.map(c => (
+                      <option key={c.id} value={c.id} disabled={c.isBusy}>
+                        {c.full_name} {c.isBusy ? '(مشغول)' : '(آزاد)'}
+                      </option>
+                    ))}
+                  </select>
+                  <button onClick={() => handleAssignCourier(selectedGroup)} className="w-full sm:w-auto bg-green-600 text-white px-8 py-3 rounded-xl hover:bg-green-700 font-bold shadow-md transition-all text-sm whitespace-nowrap">
+                    ثبت ارسال
+                  </button>
+                </div>
               )}
 
               {activeTab === 'delivered' && (

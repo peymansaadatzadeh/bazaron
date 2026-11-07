@@ -31,24 +31,26 @@ function LoginForm() {
     } else {
       setMessage('ورود موفقیت‌آمیز بود! در حال انتقال...')
       
-      // چک کردن اطلاعات کاربر
       const { data: { session } } = await supabase.auth.getSession()
+      
       if (session) {
-        const { data: profile } = await supabase.from('profiles').select('first_name').eq('id', session.user.id).single()
+        const { data: profile } = await supabase.from('profiles').select('first_name, role').eq('id', session.user.id).single()
         
-        // اگر نام کاربر خالی بود (یعنی ثبت‌نامش را تکمیل نکرده)
-        if (!profile?.first_name || profile.first_name === '') {
-          router.push('/complete-profile')
-          return
+        let targetUrl = '/dashboard'
+        
+        if (profile?.role === 'courier') {
+          targetUrl = '/courier'
+        } else if (!profile?.first_name || profile.first_name === '') {
+          targetUrl = '/complete-profile'
+        } else if (redirectUrl) {
+          targetUrl = decodeURIComponent(redirectUrl)
         }
-      }
 
-      router.refresh()
-      // اگر آدرس مقصدی وجود داشت، برو اونجا. وگرنه برو داشبورد
-      if (redirectUrl) {
-        router.push(decodeURIComponent(redirectUrl))
+        // ✅ ریدایرکت قطعی با رفرش کامل مرورگر
+        window.location.href = targetUrl
       } else {
-        router.push('/dashboard')
+        setLoading(false)
+        setMessage('خطا در دریافت اطلاعات کاربر.')
       }
     }
   }

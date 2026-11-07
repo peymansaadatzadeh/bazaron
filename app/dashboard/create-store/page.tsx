@@ -3,13 +3,41 @@
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
+
+// ✅ هندلر کلیک روی نقشه
+function MapEventsHandler({ setPosition }: { setPosition: (pos: {lat: number, lng: number}) => void }) {
+  const map = useMapEvents({
+    click(e) {
+      setPosition({ lat: e.latlng.lat, lng: e.latlng.lng });
+      map.flyTo(e.latlng, map.getZoom());
+    },
+  });
+  return null;
+}
+
+// ✅ ذخیره رفرنس نقشه برای استفاده در دکمه
+function MapRefSaver({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null> }) {
+  const map = useMap();
+  useEffect(() => {
+    mapRef.current = map;
+  }, [map, mapRef]);
+  return null;
+}
 
 export default function CreateStorePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
-  
-  // ✅ رفرنس برای اسکرول به خطا
   const messageRef = useRef<HTMLDivElement>(null)
 
   const [name, setName] = useState('')
@@ -17,6 +45,10 @@ export default function CreateStorePage() {
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
   const [sheba, setSheba] = useState('')
+  
+  const [mounted, setMounted] = useState(false)
+  const [location, setLocation] = useState({ lat: 36.696, lng: 53.536 })
+  const mapRef = useRef<L.Map | null>(null) // ✅ رفرنس نقشه
   
   const weekDays = [
     { id: 'sat', label: 'شنبه' }, { id: 'sun', label: 'یکشنبه' }, { id: 'mon', label: 'دوشنبه' },
@@ -27,7 +59,10 @@ export default function CreateStorePage() {
   const [endTime, setEndTime] = useState('21:00')
   const [logoFile, setLogoFile] = useState<File | null>(null)
 
-  // ✅ اسکرول خودکار هر زمان پیامی (خطا یا موفقیت) نمایش داده شود
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   useEffect(() => {
     if (message.text && messageRef.current) {
       messageRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -43,6 +78,23 @@ export default function CreateStorePage() {
     if (selectedDays.includes(dayId)) setSelectedDays(selectedDays.filter(d => d !== dayId))
     else setSelectedDays([...selectedDays, dayId])
   }
+
+  // ✅ هندلر پیدا کردن موقعیت
+  const handleLocate = () => {
+    if (!navigator.geolocation) {
+      alert('مرورگر شما از قابلیت موقعیت‌یابی پشتیبانی نمی‌کند.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setLocation({ lat: latitude, lng: longitude });
+        mapRef.current?.flyTo([latitude, longitude], 16);
+      },
+      (err) => alert('خطا در دریافت موقعیت مکانی. لطفاً دسترسی به GPS را بررسی کنید.'),
+      { enableHighAccuracy: true }
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -68,7 +120,9 @@ export default function CreateStorePage() {
       const { error: insertError } = await supabase.from('stores').insert([{
         owner_id: session.user.id, name, description, phone_number: phone, address,
         sheba_number: cleanSheba, working_days: selectedDays.join(','), working_hours: `${startTime} - ${endTime}`,
-        logo_url: publicUrl, status: 'pending'
+        logo_url: publicUrl, status: 'pending',
+        latitude: location.lat,
+        longitude: location.lng
       }])
       if (insertError) throw insertError
 
@@ -88,7 +142,6 @@ export default function CreateStorePage() {
           <h1 className="text-2xl font-black text-gray-800">ایجاد غرفه جدید</h1>
         </div>
         
-        {/* ✅ اتصال رفرنس به کادر پیام */}
         {message.text && (
           <div ref={messageRef} className={`p-4 rounded-xl text-sm font-bold mb-6 shadow-sm border ${message.type === 'error' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-600 border-green-100'}`}>
             {message.text}
@@ -110,9 +163,43 @@ export default function CreateStorePage() {
               <input type="text" value={sheba} onChange={(e) => setSheba(e.target.value)} required maxLength={26} dir="ltr" className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 text-left font-mono focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="IR..." />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-bold mb-2">آدرس *</label>
+              <label className="block text-sm font-bold mb-2">آدرس (جهت نمایش به مشتری) *</label>
               <textarea value={address} onChange={(e) => setAddress(e.target.value)} required rows={2} className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none" />
             </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-bold mb-2">موقعیت دقیق روی نقشه *</label>
+              <p className="text-xs text-gray-500 mb-2">برای انتخاب دقیق موقعیت مغازه، روی نقشه کلیک کنید، پین را جابجا کنید یا روی دکمه موقعیت فعلی کلیک کنید.</p>
+              
+              {/* ✅ کانتینر relative برای شناور کردن دکمه */}
+              <div className="relative w-full h-[300px] rounded-xl overflow-hidden border border-gray-200 z-0">
+                {mounted && (
+                  <MapContainer center={[location.lat, location.lng]} zoom={14} style={{ height: '100%', width: '100%' }}>
+                    <TileLayer
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    />
+                    <Marker position={[location.lat, location.lng]} />
+                    <MapEventsHandler setPosition={setLocation} />
+                    <MapRefSaver mapRef={mapRef} />
+                  </MapContainer>
+                )}
+                
+                {/* ✅ دکمه موقعیت فعلی - خارج از MapContainer */}
+                <button
+                  type="button"
+                  onClick={handleLocate}
+                  className="absolute top-3 right-3 z-[1000] bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-indigo-600 hover:bg-gray-50 transition-colors flex items-center justify-center cursor-pointer"
+                  title="موقعیت فعلی من"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
             <div className="md:col-span-2">
               <label className="block text-sm font-bold mb-2">توضیحات</label>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none" />

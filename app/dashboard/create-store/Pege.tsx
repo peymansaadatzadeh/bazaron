@@ -1,0 +1,16 @@
+'use client'
+
+import dynamic from 'next/dynamic'
+
+const CreateStoreForm = dynamic(() => import('./CreateStoreForm'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex justify-center items-center min-h-screen bg-gray-50">
+      <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div>
+    </div>
+  )
+})
+
+export default function CreateStorePage() {
+  return <CreateStoreForm />
+}

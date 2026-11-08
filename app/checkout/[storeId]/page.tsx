@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useEffect, useState, Suspense } from 'react'
+import { supabase } from '../../../../lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
-export default function UnifiedCheckoutPage() {
+// ✅ کامپوننت اصلی که از useSearchParams استفاده می‌کند
+function CheckoutContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const shippingFee = Number(searchParams.get('shipping')) || 0
@@ -15,7 +16,6 @@ export default function UnifiedCheckoutPage() {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
 
-  // استیت برای نمایش پاپ‌آپ موفقیت
   const [showSuccessModal, setShowSuccessModal] = useState(false)
 
   const [receiverName, setReceiverName] = useState('')
@@ -81,7 +81,7 @@ export default function UnifiedCheckoutPage() {
           .insert([{
             customer_id: session.user.id,
             store_id: storeId,
-            status: 'pending_admin_review', // <--- تغییر اصلی
+            status: 'pending_admin_review',
             payment_group_id: paymentGroupId,
             subtotal: subtotal,
             shipping_cost: currentShippingFee,
@@ -208,5 +208,14 @@ export default function UnifiedCheckoutPage() {
         .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
       `}</style>
     </div>
+  )
+}
+
+// ✅ خروجی نهایی که کامپوننت را داخل Suspense می‌پیچد
+export default function UnifiedCheckoutPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen bg-gray-50"><div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div></div>}>
+      <CheckoutContent />
+    </Suspense>
   )
 }

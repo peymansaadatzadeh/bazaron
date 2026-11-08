@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { supabase } from '../../../../lib/supabase'
 import { useParams, useRouter } from 'next/navigation'
 
-export default function FakePaymentGateway() {
+// ✅ کامپوننت اصلی
+function PaymentContent() {
   const params = useParams()
   const paymentGroupId = params.paymentGroupId as string
   const router = useRouter()
@@ -17,7 +18,6 @@ export default function FakePaymentGateway() {
 
   useEffect(() => {
     const fetchAmount = async () => {
-      // گرفتن مبلغ کل از جدول سفارش‌ها
       const { data, error } = await supabase
         .from('orders')
         .select('total_amount, status')
@@ -28,7 +28,6 @@ export default function FakePaymentGateway() {
       } else if (data[0].status === 'paid') {
         setErrorMsg('این فاکتور قبلاً پرداخت شده است.')
       } else {
-        // جمع زدن مبلغ همه فاکتورهای این گروه (چون هزینه ارسال فقط روی یکی هست)
         const total = data.reduce((sum, order) => sum + order.total_amount, 0)
         setAmount(total)
       }
@@ -41,7 +40,6 @@ export default function FakePaymentGateway() {
     setPaying(true)
     
     setTimeout(async () => {
-      // فراخوانی تابع امن دیتابیس برای پرداخت و واریز به کیف پول
       const { error } = await supabase.rpc('process_payment', {
         p_payment_group_id: paymentGroupId
       })
@@ -52,7 +50,6 @@ export default function FakePaymentGateway() {
       } else {
         setSuccess(true)
         setTimeout(() => {
-          // استفاده از window.location برای رفرش کامل صفحه و آپدیت شدن وضعیت
           window.location.href = '/dashboard/my-orders'
         }, 2000)
       }
@@ -121,5 +118,14 @@ export default function FakePaymentGateway() {
         </div>
       </div>
     </div>
+  )
+}
+
+// ✅ خروجی نهایی با Suspense
+export default function FakePaymentGateway() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-100 flex items-center justify-center"><div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div></div>}>
+      <PaymentContent />
+    </Suspense>
   )
 }

@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
-import SellerSidebar from '../../components/SellerSidebar'
+import SellerSidebar from '../../components/SellerSidebar' // مسیر را چک کنید
 
-export default function SellerPanelLayout({ children }: { children: React.ReactNode }) {
+export default function PanelLayout({ children }: { children: React.ReactNode }) {
   const [store, setStore] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
@@ -16,29 +16,21 @@ export default function SellerPanelLayout({ children }: { children: React.ReactN
       if (!session) { router.push('/login'); return }
 
       const { data: storeData } = await supabase.from('stores').select('*').eq('owner_id', session.user.id).maybeSingle()
-      
-      if (storeData && storeData.status === 'active') {
-        setStore(storeData)
-      } else {
-        router.push('/dashboard') // اگر غرفه نداره یا تایید نشده، بره به داشبورد اصلی
-      }
+      if (storeData) setStore(storeData)
       setLoading(false)
     }
     checkStore()
   }, [router])
 
-  if (loading || !store) return <div className="flex justify-center items-center min-h-screen bg-gray-50"><div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div></div>
+  if (loading) return <div className="flex justify-center items-center min-h-screen">در حال بارگذاری...</div>
+  if (!store) return <div className="p-8 text-center">غرفه‌ای یافت نشد.</div>
 
   return (
     <div className="flex min-h-screen bg-gray-50" dir="rtl">
-      {/* سایدبار ثابت */}
-      <SellerSidebar storeName={store.name} />
-      
-      {/* محتوای صفحات که عوض میشه */}
+      {/* ✅ اضافه کردن logoUrl */}
+      <SellerSidebar storeName={store.name} logoUrl={store.logo_url} />
       <main className="flex-grow p-4 sm:p-8 overflow-y-auto h-screen">
-        <div className="max-w-6xl mx-auto">
-          {children}
-        </div>
+        {children}
       </main>
     </div>
   )

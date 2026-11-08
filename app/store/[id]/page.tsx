@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -23,7 +23,8 @@ const StarRating = ({ rating, size = "w-5 h-5" }: { rating: number | null, size?
   );
 };
 
-export default function StorePage() {
+// ✅ کامپوننت اصلی
+function StoreContent() {
   const params = useParams()
   const storeId = params.id as string
   const router = useRouter()
@@ -225,7 +226,6 @@ export default function StorePage() {
 
   const showToast = (msg: string) => { setToastMessage(msg); setTimeout(() => setToastMessage(''), 3000) }
 
-  // ✅ افزودن مستقیم به سبد خرید از داخل غرفه
   const handleAddToCartClick = (e: React.MouseEvent, product: any) => {
     e.preventDefault(); 
     e.stopPropagation();
@@ -450,5 +450,14 @@ export default function StorePage() {
         .animate-fade-in-up { animation: fadeInUp 0.3s ease-out forwards; }
       `}</style>
     </div>
+  )
+}
+
+// ✅ خروجی نهایی با Suspense
+export default function StorePage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen bg-gray-50"><div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div></div>}>
+      <StoreContent />
+    </Suspense>
   )
 }

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Navbar from "./components/Navbar";
+// ✅ آپدیت شد به حروف کوچک
+import Navbar from "./components/navbar";
 
 export const metadata: Metadata = {
-  title: "بازار متل قو",
+  title: "بازار شهر",
   description: "مارکت‌پلیس چند فروشندگی",
 };
 

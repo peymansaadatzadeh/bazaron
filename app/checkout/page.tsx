@@ -3,8 +3,8 @@
 import dynamic from 'next/dynamic'
 import { Suspense } from 'react'
 
-// ایمپورت داینامیک برای جلوگیری از خطای SSR کتابخانه نقشه (Leaflet)
-const CheckoutForm = dynamic(() => import('./CheckoutForm'), {
+// ✅ آپدیت شد به حروف کوچک
+const CheckoutForm = dynamic(() => import('./checkoutForm'), {
   ssr: false,
   loading: () => (
     <div className="flex justify-center items-center min-h-screen bg-gray-50">

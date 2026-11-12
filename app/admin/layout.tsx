@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter, usePathname } from 'next/navigation'
-import AdminSidebar from '../components/AdminSidebar'
+// ✅ آپدیت شد به حروف کوچک
+import AdminSidebar from '../components/adminSidebar'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false) // ✅ استیت منو
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
 
@@ -26,7 +27,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     checkAdmin()
   }, [router])
 
-  // بستن منو هنگام تغییر مسیر
   useEffect(() => {
     setIsSidebarOpen(false)
   }, [pathname])
@@ -35,8 +35,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex min-h-screen bg-gray-50" dir="rtl">
-      
-      {/* ✅ هدر موبایل ادمین */}
       <header className="md:hidden fixed top-0 right-0 left-0 h-16 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4 shadow-sm">
         <span className="font-bold text-indigo-700 text-lg">پنل مدیریت</span>
         <button onClick={() => setIsSidebarOpen(true)} className="text-gray-600 p-2 hover:bg-gray-100 rounded-lg">
@@ -46,7 +44,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </button>
       </header>
 
-      {/* ✅ بک‌دراپ موبایل */}
       {isSidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity" 

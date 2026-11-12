@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter, usePathname } from 'next/navigation'
-import UserSidebar from '../components/UserSidebar'
+// ✅ آپدیت شد به حروف کوچک
+import UserSidebar from '../components/userSidebar'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -50,8 +51,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-gray-50" dir="rtl">
-      
-      {/* هدر موبایل */}
       <header className="md:hidden fixed top-0 right-0 left-0 h-16 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4 shadow-sm">
         <span className="font-bold text-gray-800 text-lg">پنل کاربری</span>
         <button onClick={() => setIsSidebarOpen(true)} className="text-gray-600 p-2 hover:bg-gray-100 rounded-lg">
@@ -61,7 +60,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </button>
       </header>
 
-      {/* بک‌دراپ موبایل */}
       {isSidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity" 

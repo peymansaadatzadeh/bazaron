@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
-export default function AdminSidebar() {
+export default function AdminSidebar({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -18,7 +18,7 @@ export default function AdminSidebar() {
     { name: 'مدیریت سفارشات', href: '/admin/orders', icon: '📦' },
     { name: 'مدیریت محصولات', href: '/admin/products', icon: '🛍️' },
     { name: 'مدیریت فروشندگان', href: '/admin/sellers', icon: '🏪' },
-    { name: 'مدیریت پیک‌ها', href: '/admin/couriers', icon: '🛵' }, // ✅ گزینه جدید
+    { name: 'مدیریت پیک‌ها', href: '/admin/couriers', icon: '🛵' },
     { name: 'مدیریت دسته‌بندی‌ها', href: '/admin/categories', icon: '📑' },
     { name: 'مدیریت نظرات', href: '/admin/reviews', icon: '💬' },
     { name: 'مدیریت تسویه‌ها', href: '/admin/withdrawals', icon: '💳' },
@@ -26,7 +26,19 @@ export default function AdminSidebar() {
   ]
 
   return (
-    <aside className="w-64 bg-white border-l border-gray-200 h-screen sticky top-0 flex flex-col shadow-sm shrink-0" dir="rtl">
+    <aside 
+      className={`fixed md:sticky top-0 right-0 z-50 w-64 h-screen bg-white border-l border-gray-200 flex flex-col shadow-2xl md:shadow-sm shrink-0 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${
+        isOpen ? 'translate-x-0' : 'translate-x-full'
+      }`} 
+      dir="rtl"
+    >
+      {/* دکمه بستن منو در موبایل */}
+      <div className="md:hidden flex justify-end p-4 pb-0">
+        <button onClick={onClose} className="p-2 bg-gray-100 rounded-full text-gray-500 hover:text-red-500">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+
       <div className="p-6 border-b border-gray-100 flex items-center justify-center">
         <span className="text-2xl font-black text-indigo-700">پنل مدیریت</span>
       </div>

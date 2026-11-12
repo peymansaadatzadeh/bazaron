@@ -3,8 +3,17 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-// پراپ logoUrl اضافه شد
-export default function SellerSidebar({ storeName, logoUrl }: { storeName: string, logoUrl: string | null }) {
+export default function SellerSidebar({ 
+  storeName, 
+  logoUrl,
+  isOpen,
+  onClose
+}: { 
+  storeName: string, 
+  logoUrl: string | null,
+  isOpen: boolean,
+  onClose: () => void
+}) {
   const pathname = usePathname()
 
   const menuItems = [
@@ -17,9 +26,19 @@ export default function SellerSidebar({ storeName, logoUrl }: { storeName: strin
   ]
 
   return (
-    <aside className="w-64 bg-gray-900 text-white border-l border-gray-800 h-screen sticky top-0 flex flex-col shadow-lg hidden md:flex">
-      <div className="p-6 border-b border-gray-800 flex items-center gap-3">
-        {/* ✅ تغییر آواتار به لوگو */}
+    <aside 
+      className={`fixed md:sticky top-0 right-0 z-50 w-64 bg-gray-900 text-white border-l border-gray-800 h-screen flex flex-col shadow-2xl md:shadow-lg shrink-0 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${
+        isOpen ? 'translate-x-0' : 'translate-x-full'
+      }`}
+      dir="rtl"
+    >
+      <div className="md:hidden flex justify-end p-4 pb-0">
+        <button onClick={onClose} className="p-2 bg-gray-800 rounded-full text-gray-400 hover:text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      <div className="p-6 border-b border-gray-800 flex items-center gap-3 mt-4 md:mt-0">
         <div className="w-12 h-12 bg-indigo-500 text-white rounded-xl flex items-center justify-center font-black text-xl shadow-sm overflow-hidden shrink-0 border border-gray-700">
           {logoUrl ? (
             <img src={logoUrl} alt={storeName} className="w-full h-full object-cover" />

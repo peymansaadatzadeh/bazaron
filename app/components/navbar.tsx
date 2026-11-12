@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation' // ✅ اضافه شدن usePathname
 
 export default function Navbar() {
   const [user, setUser] = useState<any>(null)
   const router = useRouter()
+  const pathname = usePathname() // ✅ گرفتن مسیر فعلی
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -30,13 +31,22 @@ export default function Navbar() {
     router.push('/')
   }
 
+  // ✅ اگر در صفحات داشبورد، ادمین، پنل فروشنده یا پیک هستیم، نوار بالا را نشان نده
+  if (
+    pathname.startsWith('/dashboard') || 
+    pathname.startsWith('/admin') || 
+    pathname.startsWith('/courier')
+  ) {
+    return null
+  }
+
   return (
     <nav className="bg-white shadow-sm sticky top-0 z-50" dir="rtl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           
           <div className="flex items-center gap-6">
-            <Link href="/" className="text-2xl font-black text-indigo-600">بازار متل قو</Link>
+            <Link href="/" className="text-2xl font-black text-indigo-600">بازار شهر</Link>
             <div className="hidden md:flex gap-4 font-medium text-gray-600">
               <Link href="/products" className="hover:text-indigo-600">محصولات</Link>
               <Link href="/stores" className="hover:text-indigo-600">غرفه‌ها</Link>
